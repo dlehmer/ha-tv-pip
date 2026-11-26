@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">HA TV PiP Receiver</string>
-    <string name="main_title">HA TV PiP Receiver</string>
+    <string name="app_name">HA TV PiP Plus Receiver</string>
+    <string name="main_title">HA TV PiP Plus Receiver</string>
     <string name="main_status_summary">Receiver is %1$s | Remote %2$s | Launcher %3$s</string>
     <string name="section_pip_controls">PiP-bediening</string>
     <string name="section_remote_receiver">Remote receiver</string>
@@ -56,7 +56,7 @@
     <string name="status_saved">Opgeslagen</string>
     <string name="remote_setup_saved">Remote-instelling opgeslagen</string>
     <string name="remote_use_ha_to_sync">Gebruik HA om te synchroniseren</string>
-    <string name="remote_receiver_help">Home Assistant kan dit voor je instellen. Handmatige configuratie blijft beschikbaar voor geavanceerde probleemoplossing. Remote-modus maakt uitgaand verbinding met je eigen Home Assistant-instantie; het is geen HA TV PiP-clouddienst.</string>
+    <string name="remote_receiver_help">Home Assistant kan dit voor je instellen. Handmatige configuratie blijft beschikbaar voor geavanceerde probleemoplossing. Remote-modus maakt uitgaand verbinding met je eigen Home Assistant-instantie; het is geen HA TV PiP Plus-clouddienst.</string>
     <string name="remote_details_saved">Remote receiver-gegevens zijn opgeslagen</string>
     <string name="remote_details_not_configured">Remote receiver-gegevens zijn niet geconfigureerd</string>
     <string name="remote_details_saved_description">Deze tv kan uitgaand verbinden met Home Assistant voor externe PiP-opdrachten.</string>
@@ -72,7 +72,7 @@
     <string name="state_value">Status: %1$s</string>
     <string name="last_error_value">Laatste fout: %1$s</string>
     <string name="launcher_icon_value">Launchericoon: %1$s</string>
-    <string name="launcher_help">Als dit verborgen is, kan Home Assistant dit scherm opnieuw openen met de knop Launcher openen. Je kunt ook herstellen via Android-instellingen &gt; Apps &gt; HA TV PiP.</string>
+    <string name="launcher_help">Als dit verborgen is, kan Home Assistant dit scherm opnieuw openen met de knop Launcher openen. Je kunt ook herstellen via Android-instellingen &gt; Apps &gt; HA TV PiP Plus.</string>
     <string name="launcher_pair_before_hiding">Koppel deze ontvanger voordat je het launchericoon verbergt.</string>
     <string name="pairing_code_value">Koppelcode: %1$s</string>
     <string name="waiting_for_value">Wacht op: %1$s</string>
@@ -101,7 +101,7 @@
     <string name="action_try_pip">PiP proberen</string>
     <string name="test_video_title">Testvideo</string>
     <string name="pip_subtitle_camera_preview">Smart-home cameravoorbeeld</string>
-    <string name="notification_title">HA TV PiP Receiver</string>
+    <string name="notification_title">HA TV PiP Plus Receiver</string>
     <string name="notification_local_control_running">Lokaal bedieningseindpunt actief op poort %1$d</string>
     <string name="notification_channel_local_control">Lokale bediening</string>
     <string name="compatibility_supported">Ondersteund</string>
@@ -140,7 +140,7 @@
     <string name="setup_step_remote">3. Gebruik Home Assistant om remote receiver-instellingen te synchroniseren wanneer deze tv externe PiP-opdrachten moet ontvangen.</string>
     <string name="troubleshooting_discovery">Ontdekking: houd de tv en Home Assistant op hetzelfde netwerk en controleer of het lokale endpoint actief is.</string>
     <string name="troubleshooting_remote">Remote receiver: controleer of Home Assistant de externe URL en token heeft opgeslagen en gebruik daarna Remote Config synchroniseren.</string>
-    <string name="troubleshooting_launcher">Verborgen launcher: gebruik Home Assistant Launcher openen of Android-instellingen &gt; Apps &gt; HA TV PiP om dit scherm opnieuw te openen.</string>
+    <string name="troubleshooting_launcher">Verborgen launcher: gebruik Home Assistant Launcher openen of Android-instellingen &gt; Apps &gt; HA TV PiP Plus om dit scherm opnieuw te openen.</string>
     <string name="overlay_action_confirm">Druk nogmaals om te bevestigen</string>
     <string name="overlay_action_working">Bezig…</string>
     <string name="overlay_action_done">✓ Klaar</string>

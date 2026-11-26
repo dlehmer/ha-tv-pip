@@ -111,13 +111,13 @@ jobs:
         run: |
           mkdir -p dist
           cp android-tv-app/app/build/outputs/apk/debug/app-debug.apk \
-            "dist/ha-tv-pip-android-debug-v${{ needs.setup.outputs.version }}.apk"
+            "dist/ha-tv-pip-plus-android-debug-v${{ needs.setup.outputs.version }}.apk"
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-debug-apk
-          path: dist/ha-tv-pip-android-debug-v${{ needs.setup.outputs.version }}.apk
+          path: dist/ha-tv-pip-plus-android-debug-v${{ needs.setup.outputs.version }}.apk
           if-no-files-found: error
 
   android-release:
@@ -189,17 +189,17 @@ jobs:
           mkdir -p dist
           if [ -f android-tv-app/app/build/outputs/apk/release/app-release.apk ]; then
             cp android-tv-app/app/build/outputs/apk/release/app-release.apk \
-              "dist/ha-tv-pip-android-release-v${{ needs.setup.outputs.version }}.apk"
+              "dist/ha-tv-pip-plus-android-release-v${{ needs.setup.outputs.version }}.apk"
           else
             cp android-tv-app/app/build/outputs/apk/release/app-release-unsigned.apk \
-              "dist/ha-tv-pip-android-release-v${{ needs.setup.outputs.version }}.apk"
+              "dist/ha-tv-pip-plus-android-release-v${{ needs.setup.outputs.version }}.apk"
           fi
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-release-apk
-          path: dist/ha-tv-pip-android-release-v${{ needs.setup.outputs.version }}.apk
+          path: dist/ha-tv-pip-plus-android-release-v${{ needs.setup.outputs.version }}.apk
           if-no-files-found: error
 
   android-bundle:
@@ -266,13 +266,13 @@ jobs:
         run: |
           mkdir -p dist
           cp android-tv-app/app/build/outputs/bundle/release/app-release.aab \
-            "dist/ha-tv-pip-android-release-v${{ needs.setup.outputs.version }}.aab"
+            "dist/ha-tv-pip-plus-android-release-v${{ needs.setup.outputs.version }}.aab"
 
       - name: Upload release AAB artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-release-aab
-          path: dist/ha-tv-pip-android-release-v${{ needs.setup.outputs.version }}.aab
+          path: dist/ha-tv-pip-plus-android-release-v${{ needs.setup.outputs.version }}.aab
           if-no-files-found: error
 
   ha-integration:
@@ -298,8 +298,8 @@ jobs:
         with:
           name: ha-integration-zips
           path: |
-            dist/ha-tv-pip-integration-v${{ needs.setup.outputs.version }}.zip
-            dist/ha-tv-pip-integration.zip
+            dist/ha-tv-pip-plus-integration-v${{ needs.setup.outputs.version }}.zip
+            dist/ha-tv-pip-plus-integration.zip
           if-no-files-found: error
 
   release-check:
@@ -395,7 +395,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.hatvpip.receiver
-          releaseFiles: dist/ha-tv-pip-android-release-v${{ needs.setup.outputs.version }}.aab
+          releaseFiles: dist/ha-tv-pip-plus-android-release-v${{ needs.setup.outputs.version }}.aab
           tracks: ${{ env.PLAY_STORE_TRACK }}
           releaseName: HA TV PiP v${{ needs.setup.outputs.version }}
           status: ${{ env.PLAY_STORE_RELEASE_STATUS }}
@@ -473,11 +473,11 @@ jobs:
             fi
 
             gh release upload "$RELEASE_TAG" \
-              "dist/ha-tv-pip-android-debug-v$RELEASE_VERSION.apk" \
-              "dist/ha-tv-pip-android-release-v$RELEASE_VERSION.apk" \
-              "dist/ha-tv-pip-android-release-v$RELEASE_VERSION.aab" \
-              "dist/ha-tv-pip-integration-v$RELEASE_VERSION.zip" \
-              "dist/ha-tv-pip-integration.zip" \
+              "dist/ha-tv-pip-plus-android-debug-v$RELEASE_VERSION.apk" \
+              "dist/ha-tv-pip-plus-android-release-v$RELEASE_VERSION.apk" \
+              "dist/ha-tv-pip-plus-android-release-v$RELEASE_VERSION.aab" \
+              "dist/ha-tv-pip-plus-integration-v$RELEASE_VERSION.zip" \
+              "dist/ha-tv-pip-plus-integration.zip" \
               --clobber
             gh release edit "$RELEASE_TAG" --notes-file dist/release-notes.md
             echo "publish=true" >> "$GITHUB_OUTPUT"
@@ -485,11 +485,11 @@ jobs:
           fi
 
           gh release create "$RELEASE_TAG" \
-            "dist/ha-tv-pip-android-debug-v$RELEASE_VERSION.apk" \
-            "dist/ha-tv-pip-android-release-v$RELEASE_VERSION.apk" \
-            "dist/ha-tv-pip-android-release-v$RELEASE_VERSION.aab" \
-            "dist/ha-tv-pip-integration-v$RELEASE_VERSION.zip" \
-            "dist/ha-tv-pip-integration.zip" \
+            "dist/ha-tv-pip-plus-android-debug-v$RELEASE_VERSION.apk" \
+            "dist/ha-tv-pip-plus-android-release-v$RELEASE_VERSION.apk" \
+            "dist/ha-tv-pip-plus-android-release-v$RELEASE_VERSION.aab" \
+            "dist/ha-tv-pip-plus-integration-v$RELEASE_VERSION.zip" \
+            "dist/ha-tv-pip-plus-integration.zip" \
             --draft \
             --target "${{ github.sha }}" \
             --title "HA TV PiP v$RELEASE_VERSION" \

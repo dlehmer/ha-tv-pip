@@ -1,6 +1,6 @@
 import pytest
 
-from custom_components.ha_tv_pip.discovery import parse_discovery_properties
+from custom_components.ha_tv_pip_plus.discovery import parse_discovery_properties
 
 
 def test_parse_discovery_properties_from_android_txt_records() -> None:
@@ -33,8 +33,8 @@ def test_parse_discovery_properties_defaults_optional_fields() -> None:
     )
 
     assert receiver.device_id == "receiver-id"
-    assert receiver.name == "HA TV PiP Receiver"
-    assert receiver.port == 8765
+    assert receiver.name == "HA TV PiP Plus Receiver"
+    assert receiver.port == 8767
     assert receiver.version == "unknown"
     assert receiver.pairing == "disabled"
     assert receiver.api_version == 1

@@ -4,12 +4,12 @@ import types
 from dataclasses import dataclass
 from typing import Any
 
-from custom_components.ha_tv_pip import (
+from custom_components.ha_tv_pip_plus import (
     async_remove_entry,
     async_setup_entry,
     async_unload_entry,
 )
-from custom_components.ha_tv_pip.const import (
+from custom_components.ha_tv_pip_plus.const import (
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_NAME,
@@ -21,7 +21,7 @@ from custom_components.ha_tv_pip.const import (
 
 
 def test_domain_matches_integration_slug() -> None:
-    assert DOMAIN == "ha_tv_pip"
+    assert DOMAIN == "ha_tv_pip_plus"
 
 
 @dataclass
@@ -112,7 +112,7 @@ def test_config_entry_setup_registers_receiver_device() -> None:
     assert registry.created == {
         "config_entry_id": "entry-1",
         "identifiers": {(DOMAIN, "49e3b07d8f4b7d65")},
-        "manufacturer": "HA TV PiP",
+        "manufacturer": "HA TV PiP Plus",
         "model": "Android TV Receiver",
         "name": "Nursery TV",
         "sw_version": "0.12.1",
@@ -140,7 +140,7 @@ def test_config_entry_remove_hook_resets_receiver_pairing(monkeypatch) -> None: 
         return True
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.async_reset_receiver_pairing",
+        "custom_components.ha_tv_pip_plus.async_reset_receiver_pairing",
         fake_reset_receiver_pairing,
     )
 
@@ -168,13 +168,13 @@ def test_config_entry_remove_hook_resets_receiver_pairing(monkeypatch) -> None: 
 def test_config_entry_remove_hook_continues_when_receiver_is_unavailable(
     monkeypatch: Any,
 ) -> None:
-    from custom_components.ha_tv_pip.client import ReceiverClientError
+    from custom_components.ha_tv_pip_plus.client import ReceiverClientError
 
     async def fake_reset_receiver_pairing(host: str, port: int, *, token: str) -> bool:
         raise ReceiverClientError("offline")
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.async_reset_receiver_pairing",
+        "custom_components.ha_tv_pip_plus.async_reset_receiver_pairing",
         fake_reset_receiver_pairing,
     )
 

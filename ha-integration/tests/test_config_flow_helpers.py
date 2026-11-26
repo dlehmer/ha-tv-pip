@@ -41,7 +41,7 @@ sys.modules.setdefault("homeassistant", homeassistant)
 sys.modules.setdefault("homeassistant.config_entries", config_entries)
 sys.modules.setdefault("voluptuous", voluptuous)
 
-from custom_components.ha_tv_pip.const import (  # noqa: E402
+from custom_components.ha_tv_pip_plus.const import (  # noqa: E402
     CONF_API_VERSION,
     CONF_DEFAULT_DURATION_SECONDS,
     CONF_DEFAULT_HEIGHT,
@@ -60,7 +60,7 @@ from custom_components.ha_tv_pip.const import (  # noqa: E402
     CONF_SHOW_ADVANCED_OPTIONS,
     CONF_VERSION,
 )
-from custom_components.ha_tv_pip.config_flow import (  # noqa: E402
+from custom_components.ha_tv_pip_plus.config_flow import (  # noqa: E402
     ConfigFlow,
     ReceiverOptionsFlow,
     _create_receiver_entry,
@@ -72,7 +72,7 @@ from custom_components.ha_tv_pip.config_flow import (  # noqa: E402
     _select_dropdown,
     async_get_options_flow,
 )
-from custom_components.ha_tv_pip.discovery import ReceiverDiscovery
+from custom_components.ha_tv_pip_plus.discovery import ReceiverDiscovery
 
 
 @dataclass
@@ -107,7 +107,7 @@ def test_receiver_from_user_input_creates_manual_receiver() -> None:
     receiver = _receiver_from_user_input({"host": "10.0.0.236", "port": 8765})
 
     assert receiver.device_id == "manual-10.0.0.236-8765"
-    assert receiver.name == "HA TV PiP Receiver (10.0.0.236)"
+    assert receiver.name == "HA TV PiP Plus Receiver (10.0.0.236)"
     assert receiver.host == "10.0.0.236"
     assert receiver.port == 8765
     assert receiver.version == "unknown"
@@ -277,7 +277,7 @@ def test_options_flow_opens_advanced_step_when_requested(
     flow = ReceiverOptionsFlow(types.SimpleNamespace(options={}))
     flow.hass = object()
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.config_flow.suggested_remote_home_assistant_url",
+        "custom_components.ha_tv_pip_plus.config_flow.suggested_remote_home_assistant_url",
         lambda hass: "https://example.ui.nabu.casa",
     )
 
@@ -308,7 +308,7 @@ def test_options_flow_advanced_step_saves_remote_setup_and_pending_defaults(
     synced: dict[str, Any] = {}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.config_flow.suggested_remote_home_assistant_url",
+        "custom_components.ha_tv_pip_plus.config_flow.suggested_remote_home_assistant_url",
         lambda hass: "https://example.ui.nabu.casa",
     )
 
@@ -323,7 +323,7 @@ def test_options_flow_advanced_step_saves_remote_setup_and_pending_defaults(
         return True
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.config_flow.async_sync_remote_setup_values",
+        "custom_components.ha_tv_pip_plus.config_flow.async_sync_remote_setup_values",
         fake_sync,
     )
 
@@ -380,7 +380,7 @@ def test_options_flow_advanced_step_uses_suggested_remote_url_when_token_is_prov
     flow.hass = object()
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.config_flow.suggested_remote_home_assistant_url",
+        "custom_components.ha_tv_pip_plus.config_flow.suggested_remote_home_assistant_url",
         lambda hass: "https://example.ui.nabu.casa",
     )
 
@@ -393,7 +393,7 @@ def test_options_flow_advanced_step_uses_suggested_remote_url_when_token_is_prov
         return True
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.config_flow.async_sync_remote_setup_values",
+        "custom_components.ha_tv_pip_plus.config_flow.async_sync_remote_setup_values",
         fake_sync,
     )
 

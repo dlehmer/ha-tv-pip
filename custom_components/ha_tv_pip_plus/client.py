@@ -1,0 +1,691 @@
+"""Local HTTP client for HA TV PiP Plus receivers."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from dataclasses import dataclass
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+
+class ReceiverClientError(Exception):
+    """Raised when the receiver rejects or fails a local request."""
+
+
+@dataclass(frozen=True)
+class PairingStartResult:
+    """Receiver response after starting pairing."""
+
+    pairing_state: str
+    expires_in_seconds: int
+
+
+@dataclass(frozen=True)
+class PairingConfirmResult:
+    """Receiver response after confirming pairing."""
+
+    token: str
+    client_id: str
+    client_name: str
+
+
+@dataclass(frozen=True)
+class ShowCameraCommand:
+    """Command payload sent to the receiver to show a camera stream."""
+
+    title: str
+    url: str
+    duration_seconds: int | None
+    enter_pip: bool
+    stream_type: str = "hls"
+    preview_url: str | None = None
+    fallback_url: str | None = None
+    fallback_stream_type: str | None = None
+    show_notification: bool = False
+    message: str | None = None
+    position: str | None = None
+    text_overlay: bool = False
+    title_color: str | None = None
+    title_size: int | None = None
+    message_color: str | None = None
+    message_size: int | None = None
+    background_color: str | None = None
+    width: int | None = None
+    height: int | None = None
+    muted: bool = True
+    actions: tuple[dict[str, Any], ...] = ()
+    action_callback_url: str | None = None
+
+
+def show_camera_payload(command: ShowCameraCommand) -> dict[str, Any]:
+    """Convert a show-camera command into the receiver wire payload."""
+
+    payload: dict[str, Any] = {
+        "title": command.title,
+        "url": command.url,
+        "streamType": command.stream_type,
+        "enterPip": command.enter_pip,
+        "muted": command.muted,
+    }
+    if command.duration_seconds is not None:
+        payload["durationSeconds"] = command.duration_seconds
+    if command.preview_url is not None:
+        payload["previewUrl"] = command.preview_url
+    if command.fallback_url is not None:
+        payload["fallbackUrl"] = command.fallback_url
+    if command.fallback_stream_type is not None:
+        payload["fallbackStreamType"] = command.fallback_stream_type
+    if command.show_notification:
+        payload["showNotification"] = True
+    if command.message is not None:
+        payload["message"] = command.message
+    if command.position is not None:
+        payload["position"] = command.position
+    if command.text_overlay:
+        payload["textOverlay"] = True
+    if command.title_color is not None:
+        payload["titleColor"] = command.title_color
+    if command.title_size is not None:
+        payload["titleSize"] = command.title_size
+    if command.message_color is not None:
+        payload["messageColor"] = command.message_color
+    if command.message_size is not None:
+        payload["messageSize"] = command.message_size
+    if command.background_color is not None:
+        payload["backgroundColor"] = command.background_color
+    if command.width is not None:
+        payload["width"] = command.width
+    if command.height is not None:
+        payload["height"] = command.height
+    if command.actions and command.action_callback_url:
+        payload["actions"] = [dict(action) for action in command.actions]
+        payload["actionCallbackUrl"] = command.action_callback_url
+    return payload
+
+
+@dataclass(frozen=True)
+class ReceiverCapabilities:
+    """Receiver protocol capabilities returned by the local HTTP API."""
+
+    capabilities_version: int | None
+    stream_types: tuple[str, ...]
+    positions: tuple[str, ...]
+    preview_image: bool
+    playable_fallback: bool
+    native_picture_in_picture: bool
+    overlay_fallback: bool
+    styled_notifications: bool
+    media_with_notification_text: bool
+    launcher_management: bool
+    receiver_name_management: bool
+    local_pairing: bool
+    remote_receiver_settings: bool
+
+
+@dataclass(frozen=True)
+class ReceiverCompatibility:
+    """Integration compatibility summary for a receiver status response."""
+
+    state: str
+    compatible: bool
+    missing_features: tuple[str, ...]
+    warnings: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ReceiverServiceStatus:
+    """Foreground service and boot-start diagnostics from the receiver."""
+
+    running: bool | None
+    foreground: bool | None
+    start_count: int | None
+    last_start_reason: str | None
+    last_started_at_millis: int | None
+    last_destroyed_at_millis: int | None
+    last_boot_receiver_action: str | None
+    last_boot_receiver_at_millis: int | None
+
+
+@dataclass(frozen=True)
+class ReceiverRemoteStatus:
+    """Remote receiver connection diagnostics returned by the local HTTP API."""
+
+    status: str | None
+    home_assistant_url: str | None
+    last_error: str | None
+    connected_at_millis: int | None
+    last_message_at_millis: int | None
+    connection_attempt_count: int | None
+    successful_connection_count: int | None
+    message_count: int | None
+    last_connection_attempt_at_millis: int | None
+    last_disconnected_at_millis: int | None
+    last_disconnect_reason: str | None
+
+
+@dataclass(frozen=True)
+class ReceiverStatus:
+    """Receiver status returned by the local HTTP API."""
+
+    app: str
+    version: str
+    device_id: str
+    device_name: str
+    api_version: int | None
+    capabilities: ReceiverCapabilities | None
+    compatibility: ReceiverCompatibility
+    service: ReceiverServiceStatus | None
+    control_running: bool
+    playback_state: str
+    display_mode: str
+    stream_type: str | None
+    pairing_state: str | None
+    launcher_visible: bool | None
+    remote_status: str | None
+    remote: ReceiverRemoteStatus | None
+    last_request: dict[str, Any] | None
+    error: str | None
+    raw: dict[str, Any]
+    overlay_permission: str | None = None
+    package_name: str | None = None
+
+
+async def async_start_pairing(
+    host: str,
+    port: int,
+    *,
+    client_id: str,
+    client_name: str,
+    replace_existing: bool = False,
+) -> PairingStartResult:
+    """Ask the receiver to show a pairing code on the TV."""
+
+    payload: dict[str, Any] = {
+        "clientId": client_id,
+        "clientName": client_name,
+    }
+    if replace_existing:
+        payload["replaceExisting"] = True
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/pair/start",
+        payload,
+    )
+    return PairingStartResult(
+        pairing_state=str(response.get("pairingState", "pending")),
+        expires_in_seconds=int(response.get("expiresInSeconds", 300)),
+    )
+
+
+async def async_confirm_pairing(
+    host: str,
+    port: int,
+    *,
+    client_id: str,
+    client_name: str,
+    code: str,
+) -> PairingConfirmResult:
+    """Confirm the TV-visible pairing code and receive a local auth token."""
+
+    payload = {
+        "clientId": client_id,
+        "clientName": client_name,
+        "code": code,
+    }
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/pair/confirm",
+        payload,
+    )
+
+    token = str(response.get("token", "")).strip()
+    if not token:
+        raise ReceiverClientError("missing_token")
+
+    return PairingConfirmResult(
+        token=token,
+        client_id=str(response.get("clientId", client_id)),
+        client_name=str(response.get("clientName", client_name)),
+    )
+
+
+async def async_reset_receiver_pairing(host: str, port: int, *, token: str) -> bool:
+    """Ask the paired receiver to forget this Home Assistant pairing."""
+
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/pair/reset",
+        {},
+        token,
+    )
+    return bool(response.get("accepted", False))
+
+
+async def async_show_camera(
+    host: str,
+    port: int,
+    *,
+    token: str,
+    command: ShowCameraCommand,
+) -> None:
+    """Ask the paired receiver to display a camera stream."""
+
+    await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/show",
+        show_camera_payload(command),
+        token,
+    )
+
+
+async def async_get_receiver_status(host: str, port: int) -> ReceiverStatus:
+    """Fetch receiver status from the local API."""
+
+    response = await asyncio.to_thread(_get_json, host, port, "/status")
+    return receiver_status_from_payload(response)
+
+
+def receiver_status_from_payload(response: dict[str, Any]) -> ReceiverStatus:
+    """Parse a receiver status payload."""
+
+    pairing = response.get("pairing")
+    management = response.get("management")
+    remote = response.get("remote")
+    playback = response.get("playback")
+    last_request = response.get("lastRequest")
+    capabilities = _parse_capabilities(response.get("capabilities"))
+    api_version = _optional_int(response.get("apiVersion"))
+    return ReceiverStatus(
+        app=str(response.get("app", "HA TV PiP Plus Receiver")),
+        version=str(response.get("version", "")),
+        device_id=str(response.get("deviceId", "")),
+        device_name=str(response.get("deviceName", "")),
+        api_version=api_version,
+        capabilities=capabilities,
+        compatibility=_receiver_compatibility(api_version, capabilities),
+        service=_parse_service_status(response.get("service")),
+        control_running=bool(response.get("controlRunning", False)),
+        playback_state=str(response.get("playbackState", "unknown")),
+        display_mode=str(response.get("displayMode", "unknown")),
+        stream_type=_optional_text(
+            response.get("streamType")
+            or (playback.get("streamType") if isinstance(playback, dict) else None)
+        ),
+        pairing_state=str(pairing.get("state")) if isinstance(pairing, dict) else None,
+        launcher_visible=(
+            bool(management["launcherVisible"])
+            if isinstance(management, dict) and "launcherVisible" in management
+            else None
+        ),
+        remote_status=(
+            str(remote["status"])
+            if isinstance(remote, dict) and remote.get("status")
+            else None
+        ),
+        remote=_parse_remote_status(remote),
+        last_request=last_request if isinstance(last_request, dict) else None,
+        error=str(response["error"]) if response.get("error") else None,
+        raw=response,
+        overlay_permission=_optional_text(response.get("overlayPermission")),
+        package_name=_optional_text(response.get("packageName")),
+    )
+
+
+async def async_close_receiver(host: str, port: int, *, token: str) -> bool:
+    """Ask the paired receiver to close the active display."""
+
+    response = await asyncio.to_thread(_post_json, host, port, "/close", {}, token)
+    return bool(response.get("accepted", False))
+
+
+async def async_open_receiver(host: str, port: int, *, token: str) -> bool:
+    """Ask the paired receiver to open its management screen."""
+
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/management/open",
+        {},
+        token,
+    )
+    return bool(response.get("accepted", False))
+
+
+async def async_set_launcher_visible(
+    host: str,
+    port: int,
+    *,
+    token: str,
+    visible: bool,
+) -> bool:
+    """Show or hide the receiver launcher icon."""
+
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/management/launcher",
+        {"visible": visible},
+        token,
+    )
+    return bool(response.get("launcherVisible", visible))
+
+
+async def async_set_receiver_name(
+    host: str,
+    port: int,
+    *,
+    token: str,
+    name: str,
+) -> str:
+    """Set the paired receiver display name."""
+
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/management/name",
+        {"name": name},
+        token,
+    )
+    return str(response.get("deviceName", name))
+
+
+async def async_clear_receiver_name(host: str, port: int, *, token: str) -> str:
+    """Reset the paired receiver display name to its Android device name."""
+
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/management/name",
+        {"clear": True},
+        token,
+    )
+    return str(response.get("deviceName", ""))
+
+
+async def async_set_remote_configuration(
+    host: str,
+    port: int,
+    *,
+    token: str,
+    home_assistant_url: str,
+    access_token: str,
+) -> bool:
+    """Store remote receiver connection settings on the paired receiver."""
+
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/management/remote",
+        {
+            "homeAssistantUrl": home_assistant_url,
+            "accessToken": access_token,
+        },
+        token,
+    )
+    return bool(response.get("accepted", False))
+
+
+async def async_clear_remote_configuration(
+    host: str,
+    port: int,
+    *,
+    token: str,
+) -> bool:
+    """Clear remote receiver connection settings on the paired receiver."""
+
+    response = await asyncio.to_thread(
+        _post_json,
+        host,
+        port,
+        "/management/remote",
+        {"clear": True},
+        token,
+    )
+    return bool(response.get("accepted", False))
+
+
+def _post_json(
+    host: str,
+    port: int,
+    path: str,
+    payload: dict[str, Any],
+    token: str | None = None,
+) -> dict[str, Any]:
+    url = f"http://{host}:{port}{path}"
+    headers = {"Content-Type": "application/json"}
+    if token is not None:
+        headers["Authorization"] = f"Bearer {token}"
+
+    request = Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:  # noqa: S310
+            body = response.read().decode()
+    except HTTPError as error:
+        body = error.read().decode()
+        message = _error_message(body) or f"http_{error.code}"
+        raise ReceiverClientError(message) from error
+    except (TimeoutError, URLError) as error:
+        raise ReceiverClientError("cannot_connect") from error
+
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError as error:
+        raise ReceiverClientError("invalid_response") from error
+
+    if not isinstance(parsed, dict):
+        raise ReceiverClientError("invalid_response")
+
+    return parsed
+
+
+def _get_json(host: str, port: int, path: str) -> dict[str, Any]:
+    url = f"http://{host}:{port}{path}"
+    request = Request(url, method="GET")
+    try:
+        with urlopen(request, timeout=5) as response:  # noqa: S310
+            body = response.read().decode()
+    except HTTPError as error:
+        body = error.read().decode()
+        message = _error_message(body) or f"http_{error.code}"
+        raise ReceiverClientError(message) from error
+    except (TimeoutError, URLError) as error:
+        raise ReceiverClientError("cannot_connect") from error
+
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError as error:
+        raise ReceiverClientError("invalid_response") from error
+
+    if not isinstance(parsed, dict):
+        raise ReceiverClientError("invalid_response")
+
+    return parsed
+
+
+def _error_message(body: str) -> str | None:
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    value = parsed.get("error")
+    return str(value) if value else None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _optional_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def _parse_service_status(value: Any) -> ReceiverServiceStatus | None:
+    if not isinstance(value, dict):
+        return None
+
+    return ReceiverServiceStatus(
+        running=_optional_bool(value.get("running")),
+        foreground=_optional_bool(value.get("foreground")),
+        start_count=_optional_int(value.get("startCount")),
+        last_start_reason=_optional_text(value.get("lastStartReason")),
+        last_started_at_millis=_optional_int(value.get("lastStartedAtMillis")),
+        last_destroyed_at_millis=_optional_int(value.get("lastDestroyedAtMillis")),
+        last_boot_receiver_action=_optional_text(value.get("lastBootReceiverAction")),
+        last_boot_receiver_at_millis=_optional_int(
+            value.get("lastBootReceiverAtMillis")
+        ),
+    )
+
+
+def _parse_remote_status(value: Any) -> ReceiverRemoteStatus | None:
+    if not isinstance(value, dict):
+        return None
+
+    return ReceiverRemoteStatus(
+        status=_optional_text(value.get("status")),
+        home_assistant_url=_optional_text(value.get("homeAssistantUrl")),
+        last_error=_optional_text(value.get("lastError")),
+        connected_at_millis=_optional_int(value.get("connectedAtMillis")),
+        last_message_at_millis=_optional_int(value.get("lastMessageAtMillis")),
+        connection_attempt_count=_optional_int(value.get("connectionAttemptCount")),
+        successful_connection_count=_optional_int(
+            value.get("successfulConnectionCount")
+        ),
+        message_count=_optional_int(value.get("messageCount")),
+        last_connection_attempt_at_millis=_optional_int(
+            value.get("lastConnectionAttemptAtMillis")
+        ),
+        last_disconnected_at_millis=_optional_int(
+            value.get("lastDisconnectedAtMillis")
+        ),
+        last_disconnect_reason=_optional_text(value.get("lastDisconnectReason")),
+    )
+
+
+def _parse_capabilities(value: Any) -> ReceiverCapabilities | None:
+    if not isinstance(value, dict):
+        return None
+
+    return ReceiverCapabilities(
+        capabilities_version=_optional_int(value.get("capabilitiesVersion")),
+        stream_types=_string_tuple(value.get("streamTypes")),
+        positions=_string_tuple(value.get("positions")),
+        preview_image=bool(value.get("previewImage", False)),
+        playable_fallback=bool(value.get("playableFallback", False)),
+        native_picture_in_picture=bool(value.get("nativePictureInPicture", False)),
+        overlay_fallback=bool(value.get("overlayFallback", False)),
+        styled_notifications=bool(value.get("styledNotifications", False)),
+        media_with_notification_text=bool(
+            value.get("mediaWithNotificationText", False)
+        ),
+        launcher_management=bool(value.get("launcherManagement", False)),
+        receiver_name_management=bool(
+            value.get("receiverNameManagement", False)
+        ),
+        local_pairing=bool(value.get("localPairing", False)),
+        remote_receiver_settings=bool(value.get("remoteReceiverSettings", False)),
+    )
+
+
+def _receiver_compatibility(
+    api_version: int | None,
+    capabilities: ReceiverCapabilities | None,
+) -> ReceiverCompatibility:
+    """Summarise how well this receiver can support the current integration."""
+
+    if api_version is not None and api_version < 1:
+        return ReceiverCompatibility(
+            state="incompatible",
+            compatible=False,
+            missing_features=("api_v1",),
+            warnings=(),
+        )
+
+    if capabilities is None:
+        return ReceiverCompatibility(
+            state="legacy",
+            compatible=True,
+            missing_features=("capability_metadata",),
+            warnings=("best_effort_without_capabilities",),
+        )
+
+    missing_features: list[str] = []
+    warnings: list[str] = []
+    supported_streams = set(capabilities.stream_types)
+    if not supported_streams.intersection({"hls", "mjpeg", "snapshot"}):
+        missing_features.append("display_stream")
+    if "notification" not in supported_streams:
+        warnings.append("styled_notifications_unavailable")
+    if not capabilities.preview_image:
+        warnings.append("snapshot_preview_unavailable")
+    if not capabilities.playable_fallback:
+        warnings.append("playable_fallback_unavailable")
+    if not capabilities.media_with_notification_text:
+        warnings.append("media_text_footer_unavailable")
+    if not capabilities.launcher_management:
+        warnings.append("launcher_management_unavailable")
+    if not capabilities.remote_receiver_settings:
+        warnings.append("remote_receiver_settings_unavailable")
+
+    if capabilities.capabilities_version is None:
+        warnings.append("unknown_capabilities_version")
+    elif capabilities.capabilities_version > 1:
+        warnings.append("newer_receiver_capabilities_version")
+
+    compatible = not missing_features
+    if not compatible:
+        state = "incompatible"
+    elif warnings:
+        state = "degraded"
+    else:
+        state = "compatible"
+
+    return ReceiverCompatibility(
+        state=state,
+        compatible=compatible,
+        missing_features=tuple(missing_features),
+        warnings=tuple(warnings),
+    )
+
+
+def _string_tuple(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+
+    return tuple(str(item) for item in value if item is not None)

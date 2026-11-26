@@ -1,9 +1,9 @@
-"""Tests for the HA TV PiP receiver client helpers."""
+"""Tests for the HA TV PiP Plus receiver client helpers."""
 
 import asyncio
 from typing import Any
 
-from custom_components.ha_tv_pip.client import (
+from custom_components.ha_tv_pip_plus.client import (
     ShowCameraCommand,
     _error_message,
     _get_json,
@@ -49,7 +49,7 @@ def test_post_json_sets_bearer_token(monkeypatch) -> None:  # type: ignore[no-un
         captured["timeout"] = timeout
         return FakeResponse()
 
-    monkeypatch.setattr("custom_components.ha_tv_pip.client.urlopen", fake_urlopen)
+    monkeypatch.setattr("custom_components.ha_tv_pip_plus.client.urlopen", fake_urlopen)
 
     response = _post_json(
         "10.0.0.236",
@@ -87,7 +87,7 @@ def test_post_json_sends_snapshot_stream_type(monkeypatch) -> None:  # type: ign
         captured["body"] = request.data.decode()
         return FakeResponse()
 
-    monkeypatch.setattr("custom_components.ha_tv_pip.client.urlopen", fake_urlopen)
+    monkeypatch.setattr("custom_components.ha_tv_pip_plus.client.urlopen", fake_urlopen)
 
     _post_json(
         "10.0.0.236",
@@ -112,7 +112,7 @@ def test_async_start_pairing_can_request_replacement(monkeypatch) -> None:  # ty
         return {"pairingState": "pending", "expiresInSeconds": 300}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -235,7 +235,7 @@ def test_get_json_fetches_receiver_status(monkeypatch) -> None:  # type: ignore[
         captured["timeout"] = timeout
         return FakeResponse()
 
-    monkeypatch.setattr("custom_components.ha_tv_pip.client.urlopen", fake_urlopen)
+    monkeypatch.setattr("custom_components.ha_tv_pip_plus.client.urlopen", fake_urlopen)
 
     response = _get_json("10.0.0.236", 8765, "/status")
 
@@ -250,7 +250,7 @@ def test_get_json_fetches_receiver_status(monkeypatch) -> None:  # type: ignore[
 def test_async_get_receiver_status_parses_response(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     async def fake_to_thread(func, *args):  # type: ignore[no-untyped-def]
         return {
-            "app": "HA TV PiP Receiver",
+            "app": "HA TV PiP Plus Receiver",
             "version": "0.24.0",
             "deviceId": "device-1",
             "deviceName": "Nursery TV",
@@ -304,7 +304,7 @@ def test_async_get_receiver_status_parses_response(monkeypatch) -> None:  # type
         }
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -378,7 +378,7 @@ def test_async_get_receiver_status_treats_missing_capabilities_as_legacy(
 ) -> None:
     async def fake_to_thread(func: Any, *args: Any) -> dict[str, Any]:
         return {
-            "app": "HA TV PiP Receiver",
+            "app": "HA TV PiP Plus Receiver",
             "version": "0.12.0",
             "deviceId": "device-1",
             "deviceName": "Nursery TV",
@@ -389,7 +389,7 @@ def test_async_get_receiver_status_treats_missing_capabilities_as_legacy(
         }
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -407,7 +407,7 @@ def test_async_get_receiver_status_reports_degraded_capabilities(
 ) -> None:
     async def fake_to_thread(func: Any, *args: Any) -> dict[str, Any]:
         return {
-            "app": "HA TV PiP Receiver",
+            "app": "HA TV PiP Plus Receiver",
             "version": "1.0.0",
             "deviceId": "device-1",
             "deviceName": "Nursery TV",
@@ -429,7 +429,7 @@ def test_async_get_receiver_status_reports_degraded_capabilities(
         }
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -447,7 +447,7 @@ def test_async_get_receiver_status_reports_incompatible_api(
 ) -> None:
     async def fake_to_thread(func: Any, *args: Any) -> dict[str, Any]:
         return {
-            "app": "HA TV PiP Receiver",
+            "app": "HA TV PiP Plus Receiver",
             "version": "0.1.0",
             "deviceId": "device-1",
             "deviceName": "Nursery TV",
@@ -455,7 +455,7 @@ def test_async_get_receiver_status_reports_incompatible_api(
         }
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -471,7 +471,7 @@ def test_async_get_receiver_status_reports_incompatible_stream_support(
 ) -> None:
     async def fake_to_thread(func: Any, *args: Any) -> dict[str, Any]:
         return {
-            "app": "HA TV PiP Receiver",
+            "app": "HA TV PiP Plus Receiver",
             "version": "1.0.0",
             "deviceId": "device-1",
             "deviceName": "Nursery TV",
@@ -484,7 +484,7 @@ def test_async_get_receiver_status_reports_incompatible_stream_support(
         }
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -500,7 +500,7 @@ def test_async_close_receiver_returns_accepted(monkeypatch) -> None:  # type: ig
         return {"accepted": True}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -512,7 +512,7 @@ def test_async_open_receiver_returns_accepted(monkeypatch) -> None:  # type: ign
         return {"accepted": True}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -527,7 +527,7 @@ def test_async_reset_receiver_pairing_returns_accepted(monkeypatch) -> None:  # 
         return {"accepted": True}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -542,7 +542,7 @@ def test_async_set_launcher_visible_returns_receiver_state(monkeypatch) -> None:
         return {"launcherVisible": False}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -567,7 +567,7 @@ def test_async_set_receiver_name_returns_receiver_name(monkeypatch) -> None:  # 
         return {"accepted": True, "deviceName": "Living Room Chromecast"}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -592,7 +592,7 @@ def test_async_clear_receiver_name_returns_receiver_name(monkeypatch) -> None:  
         return {"accepted": True, "deviceName": "Living Room TV"}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -616,7 +616,7 @@ def test_async_set_remote_configuration_returns_accepted(monkeypatch) -> None:  
         return {"accepted": True}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 
@@ -641,7 +641,7 @@ def test_async_clear_remote_configuration_returns_accepted(monkeypatch) -> None:
         return {"accepted": True}
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.client.asyncio.to_thread",
+        "custom_components.ha_tv_pip_plus.client.asyncio.to_thread",
         fake_to_thread,
     )
 

@@ -1,17 +1,17 @@
-"""Tests for HA TV PiP Home Assistant entities."""
+"""Tests for HA TV PiP Plus Home Assistant entities."""
 
 import asyncio
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
-import custom_components.ha_tv_pip.binary_sensor as binary_sensor
-import custom_components.ha_tv_pip.button as button
-import custom_components.ha_tv_pip.diagnostics as diagnostics
-import custom_components.ha_tv_pip.repairs as repairs
-import custom_components.ha_tv_pip.sensor as sensor
-import custom_components.ha_tv_pip.switch as switch
-import custom_components.ha_tv_pip.version as version_helpers
-from custom_components.ha_tv_pip.client import (
+import custom_components.ha_tv_pip_plus.binary_sensor as binary_sensor
+import custom_components.ha_tv_pip_plus.button as button
+import custom_components.ha_tv_pip_plus.diagnostics as diagnostics
+import custom_components.ha_tv_pip_plus.repairs as repairs
+import custom_components.ha_tv_pip_plus.sensor as sensor
+import custom_components.ha_tv_pip_plus.switch as switch
+import custom_components.ha_tv_pip_plus.version as version_helpers
+from custom_components.ha_tv_pip_plus.client import (
     ReceiverCapabilities,
     ReceiverClientError,
     ReceiverCompatibility,
@@ -19,7 +19,7 @@ from custom_components.ha_tv_pip.client import (
     ReceiverServiceStatus,
     ReceiverStatus,
 )
-from custom_components.ha_tv_pip.const import (
+from custom_components.ha_tv_pip_plus.const import (
     CONF_CAMERA_DEFAULTS,
     CONF_DEVICE_ID,
     CONF_HOST,
@@ -31,8 +31,8 @@ from custom_components.ha_tv_pip.const import (
     CONF_TOKEN,
     DOMAIN,
 )
-from custom_components.ha_tv_pip.restreaming import restreaming_provider_metadata
-from custom_components.ha_tv_pip.services import (
+from custom_components.ha_tv_pip_plus.restreaming import restreaming_provider_metadata
+from custom_components.ha_tv_pip_plus.services import (
     CAMERA_COMPATIBILITY_KEY,
     CAMERA_DEFAULTS_LISTENERS_KEY,
     CAMERA_LAST_RESULT_KEY,
@@ -79,7 +79,7 @@ class FakeHass:
 
 def _status() -> ReceiverStatus:
     return ReceiverStatus(
-        app="HA TV PiP Receiver",
+        app="HA TV PiP Plus Receiver",
         version="0.24.0",
         device_id="device-1",
         device_name="Nursery TV",
@@ -222,14 +222,17 @@ def test_binary_sensor_setup_adds_connected_sensor() -> None:
     assert [entity._attr_unique_id for entity in added] == [
         "device-1_connected",
         "device-1_remote_connected",
+        "device-1_overlay_permission",
         "device-1_camera_restreaming_recommended",
     ]
     assert [entity._attr_translation_key for entity in added] == [
         "connected",
         "remote_connected",
+        "overlay_permission",
         "camera_restreaming_recommended",
     ]
     assert [entity._attr_entity_category for entity in added] == [
+        "diagnostic",
         "diagnostic",
         "diagnostic",
         "diagnostic",
@@ -247,6 +250,8 @@ def test_button_setup_adds_open_test_and_close_buttons() -> None:
         "device-1_refresh_status",
         "device-1_test_pip",
         "device-1_close_pip",
+        "device-1_grant_overlay_permission",
+        "device-1_install_tv_app",
     ]
     assert [entity._attr_name for entity in added] == [
         "Open Launcher",
@@ -254,6 +259,8 @@ def test_button_setup_adds_open_test_and_close_buttons() -> None:
         "Refresh Status",
         "Test PiP",
         "Close PiP",
+        "Grant Overlay Permission",
+        "Install or Update TV App",
     ]
     assert [entity._attr_translation_key for entity in added] == [
         "open_launcher",
@@ -261,12 +268,16 @@ def test_button_setup_adds_open_test_and_close_buttons() -> None:
         "refresh_status",
         "test_pip",
         "close_pip",
+        "grant_overlay_permission",
+        "install_tv_app",
     ]
     assert added[0]._attr_entity_category == "config"
     assert added[1]._attr_entity_category == "config"
     assert not hasattr(added[2], "_attr_entity_category")
     assert not hasattr(added[3], "_attr_entity_category")
     assert not hasattr(added[4], "_attr_entity_category")
+    assert added[5]._attr_entity_category == "config"
+    assert added[6]._attr_entity_category == "config"
 
 
 def test_switch_setup_adds_launcher_visibility_switch() -> None:
@@ -306,7 +317,7 @@ def test_status_sensor_updates_from_receiver(monkeypatch) -> None:  # type: igno
     assert (
         entity._attr_extra_state_attributes["version_guidance"]
         == "Update the Android receiver APK and Home Assistant integration "
-        "from the same HA TV PiP release."
+        "from the same HA TV PiP Plus release."
     )
     assert entity._attr_extra_state_attributes["capabilities_version"] == 1
     assert entity._attr_extra_state_attributes["supported_stream_types"] == [
@@ -1073,7 +1084,7 @@ def test_test_button_sends_public_test_stream(monkeypatch) -> None:  # type: ign
         "port": 8765,
         "token": "secret-token",
         "prefer_remote": False,
-        "title": "HA TV PiP Test",
+        "title": "HA TV PiP Plus Test",
         "stream_type": "hls",
     }
     result = hass.data[DOMAIN][LAST_COMMAND_RESULT_KEY]["entry-1"]
@@ -1117,7 +1128,7 @@ def test_test_button_prefers_remote_transport_when_enabled(monkeypatch) -> None:
     assert captured == {
         "device_id": "device-1",
         "prefer_remote": True,
-        "title": "HA TV PiP Test",
+        "title": "HA TV PiP Plus Test",
     }
     result = hass.data[DOMAIN][LAST_COMMAND_RESULT_KEY]["entry-1"]
     assert result["command_type"] == "test_pip"

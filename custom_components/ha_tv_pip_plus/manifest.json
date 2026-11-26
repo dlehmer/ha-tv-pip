@@ -1,0 +1,21 @@
+{
+  "domain": "ha_tv_pip_plus",
+  "name": "HA TV PiP Plus",
+  "codeowners": [
+    "@dlehmer"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/dlehmer/ha-tv-pip",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/dlehmer/ha-tv-pip/issues",
+  "requirements": [
+    "adb-shell[async]==0.4.4"
+  ],
+  "version": "1.33.0",
+  "zeroconf": [
+    {
+      "type": "_ha-tv-pip-plus._tcp.local."
+    }
+  ]
+}

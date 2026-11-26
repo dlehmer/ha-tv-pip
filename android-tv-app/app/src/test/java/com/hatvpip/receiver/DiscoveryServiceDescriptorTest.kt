@@ -14,7 +14,7 @@ class DiscoveryServiceDescriptorTest {
         )
 
         assertEquals("HA TV PiP - Nursery TV", descriptor.serviceName)
-        assertEquals("_ha-tv-pip._tcp.", descriptor.serviceType)
+        assertEquals("_ha-tv-pip-plus._tcp.", descriptor.serviceType)
         assertEquals(8765, descriptor.port)
         assertEquals("device-123", descriptor.attributes["id"])
         assertEquals("Nursery TV", descriptor.attributes["name"])

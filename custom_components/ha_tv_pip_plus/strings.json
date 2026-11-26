@@ -1,0 +1,619 @@
+{
+  "config": {
+    "abort": {
+      "invalid_discovery": "Home Assistant found an HA TV PiP Plus receiver, but the discovery data was incomplete."
+    },
+    "error": {
+      "already_paired": "This receiver is already paired. Use Reset Pairing on the TV app, then try again.",
+      "cannot_connect": "Could not connect to the Android TV receiver.",
+      "invalid_client": "The receiver rejected this Home Assistant pairing session.",
+      "invalid_code": "Enter the six-digit pairing code shown on the TV.",
+      "invalid_host": "Enter the Android TV receiver IP address or hostname.",
+      "invalid_port": "Enter a valid port between 1 and 65535.",
+      "pairing_not_started": "Start pairing again and enter the new code shown on the TV.",
+      "adb_missing_library": "The adb-shell library is not installed. Restart Home Assistant and try again.",
+      "adb_not_reachable": "Could not reach the TV over ADB on port 5555. On the TV, turn on USB debugging (or Network debugging) in Settings > System > Developer options, then try again.",
+      "adb_auth_timeout": "The TV did not answer the 'Allow debugging?' prompt in time. Accept it on the TV (tick 'Always allow'), then try again.",
+      "adb_auth_rejected": "The TV rejected Home Assistant's debugging request. Try again and choose Allow on the TV.",
+      "adb_download_failed": "Could not download the TV app from GitHub Releases. Check Home Assistant's internet connection.",
+      "adb_no_apk_in_release": "The latest GitHub release has no app (APK) attached.",
+      "adb_install_conflict": "A differently signed copy of HA TV PiP Plus is already on the TV. Uninstall it on the TV (Settings > Apps), then try again.",
+      "adb_install_failed": "The TV refused to install the app. Check Home Assistant's logs for details.",
+      "adb_grant_failed": "The app installed, but the TV did not accept the overlay permission.",
+      "adb_adb_failed": "An ADB command failed. Check Home Assistant's logs for details."
+    },
+    "step": {
+      "confirm": {
+        "data": {
+          "name": "Receiver name"
+        },
+        "description": "Home Assistant discovered {name} at {host}:{port}. Add this Android TV receiver?",
+        "title": "Add discovered HA TV PiP Plus receiver"
+      },
+      "pair": {
+        "data": {
+          "code": "Pairing code"
+        },
+        "description": "Enter the six-digit pairing code shown on {name}. The receiver is at {host}:{port}.",
+        "title": "Pair HA TV PiP Plus receiver"
+      },
+      "user": {
+        "data": {
+          "host": "Receiver host",
+          "port": "Receiver port",
+          "install_app": "Install the HA TV PiP Plus app on this TV first (needs USB debugging on)"
+        },
+        "description": "Use manual setup if Home Assistant has not discovered the Android TV receiver automatically.",
+        "title": "Add HA TV PiP Plus receiver"
+      },
+      "install_app": {
+        "title": "Install the app on the TV",
+        "description": "Home Assistant will install the latest HA TV PiP Plus app on {host}, allow it to show popups over other apps, open it, and then pair with it.\n\nBefore you continue, on the TV:\n1. Open Settings > System > About and click the build number 7 times to turn on developer options.\n2. Open Settings > System > Developer options and turn on USB debugging.\n\nAfter you click Submit, watch the TV: accept the 'Allow debugging?' prompt and tick 'Always allow'. Installing takes up to a minute. You can turn USB debugging off again afterwards."
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "cannot_connect": "Could not send the remote receiver settings to the Android TV receiver. Check that the TV is online and paired.",
+      "invalid_default_duration": "Default duration must be 0 or between 1 and 3600 seconds.",
+      "invalid_default_overlay_size": "Default width and height must be 0 or within the supported overlay size range.",
+      "invalid_default_position": "Choose a supported popup position.",
+      "invalid_default_stream_type": "Choose a supported stream strategy.",
+      "remote_fields_required": "Enter both the Home Assistant external URL and access token, or leave both blank to disable remote receiver mode.",
+      "camera_button_incomplete": "Each row needs both a camera and the lock, cover, script, or button it controls.",
+      "camera_button_duplicate": "Each camera can only have one button.",
+      "camera_button_label_too_long": "Button labels can be at most 40 characters."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "default_duration_seconds": "Default duration",
+          "default_height": "Default height",
+          "default_position": "Default position",
+          "default_snapshot_fallback": "Snapshot fallback by default",
+          "default_stream_type": "Preferred stream strategy",
+          "prefer_remote_transport": "Prefer remote transport",
+          "show_advanced_options": "Show advanced settings",
+          "edit_camera_buttons": "Set up door buttons for cameras"
+        },
+        "description": "Set everyday receiver defaults. Advanced popup size, position, and remote receiver credentials are hidden unless needed.",
+        "title": "Receiver defaults"
+      },
+      "advanced": {
+        "data": {
+          "default_height": "Default height",
+          "default_position": "Default position",
+          "default_width": "Default width",
+          "remote_access_token": "Home Assistant long-lived access token",
+          "remote_home_assistant_url": "Home Assistant external URL"
+        },
+        "description": "Set advanced popup defaults and optional remote receiver settings. Use 0 for width or height to keep the built-in service default. Remote receiver settings are sent to the paired TV over the local connection. Suggested external URL: {suggested_url}",
+        "title": "Advanced receiver setup"
+      },
+      "camera_buttons": {
+        "title": "Door buttons",
+        "description": "Pair a camera with the lock, garage door, script, or button it should control. Whenever that camera pops up on a TV, the popup gets one button for it: locks unlock, covers open, and scripts or buttons run. The popup takes remote focus, and the button needs two presses. These pairings are shared by all your TVs. Leave a row empty to remove it. Tip: point the button at a script if you want extra safety checks before it runs.",
+        "data": {
+          "camera_1": "Camera 1",
+          "button_target_1": "Lock, cover, script or button for camera 1",
+          "button_label_1": "Button label for camera 1 (optional)",
+          "camera_2": "Camera 2",
+          "button_target_2": "Lock, cover, script or button for camera 2",
+          "button_label_2": "Button label for camera 2 (optional)",
+          "camera_3": "Camera 3",
+          "button_target_3": "Lock, cover, script or button for camera 3",
+          "button_label_3": "Button label for camera 3 (optional)",
+          "camera_4": "Camera 4",
+          "button_target_4": "Lock, cover, script or button for camera 4",
+          "button_label_4": "Button label for camera 4 (optional)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connected": {
+        "name": "Connected"
+      },
+      "camera_restreaming_recommended": {
+        "name": "Camera Restreaming Recommended"
+      },
+      "remote_connected": {
+        "name": "Remote Connected"
+      },
+      "overlay_permission": {
+        "name": "Overlay permission"
+      }
+    },
+    "button": {
+      "close_pip": {
+        "name": "Close PiP"
+      },
+      "open_launcher": {
+        "name": "Open Launcher"
+      },
+      "refresh_status": {
+        "name": "Refresh Status"
+      },
+      "sync_remote_config": {
+        "name": "Sync Remote Config"
+      },
+      "test_pip": {
+        "name": "Test PiP"
+      },
+      "grant_overlay_permission": {
+        "name": "Grant overlay permission"
+      },
+      "install_tv_app": {
+        "name": "Install or update TV app"
+      }
+    },
+    "sensor": {
+      "display_mode": {
+        "name": "Active Display Mode"
+      },
+      "last_error": {
+        "name": "Last Receiver Error"
+      },
+      "last_camera_result": {
+        "name": "Last Camera Result"
+      },
+      "last_command_result": {
+        "name": "Last Command Result"
+      },
+      "last_camera_compatibility": {
+        "name": "Last Camera Compatibility"
+      },
+      "restreaming_provider_status": {
+        "name": "Restreaming Provider Status"
+      },
+      "saved_camera_defaults": {
+        "name": "Saved Camera Defaults"
+      },
+      "receiver_version": {
+        "name": "Receiver Version"
+      },
+      "receiver_compatibility": {
+        "name": "Receiver Compatibility"
+      },
+      "status": {
+        "name": "Status"
+      },
+      "stream_type": {
+        "name": "Active Stream Type"
+      }
+    },
+    "switch": {
+      "hide_launcher": {
+        "name": "Hide Launcher"
+      }
+    }
+  },
+  "services": {
+    "show_camera": {
+      "name": "Show camera",
+      "description": "Show a Home Assistant camera stream or snapshot on a paired Android TV receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "enter_pip": {
+          "name": "Enter PiP"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "stream_type": {
+          "name": "Stream type"
+        },
+        "title": {
+          "name": "Title"
+        },
+        "background_color": {
+          "name": "Background color"
+        },
+        "message": {
+          "name": "Message"
+        },
+        "message_color": {
+          "name": "Message color"
+        },
+        "message_size": {
+          "name": "Message size"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "title_color": {
+          "name": "Title color"
+        },
+        "title_size": {
+          "name": "Title size"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        },
+        "text_overlay": {
+          "name": "Text over media"
+        },
+        "actions": {
+          "name": "Overlay buttons",
+          "description": "Up to three buttons shown under the popup. Leave this out to use the door button paired with this camera in the receiver settings, or set it to an empty list to show no buttons. The popup takes remote focus, each button needs a second press to confirm (unless confirm is false), and Home Assistant runs the button's action only if it is pressed before the popup expires. Requires overlay permission on the receiver."
+        }
+      }
+    },
+    "show_snapshot": {
+      "name": "Show snapshot",
+      "description": "Show a camera snapshot on a paired Android TV receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "enter_pip": {
+          "name": "Enter PiP"
+        },
+        "title": {
+          "name": "Title"
+        },
+        "background_color": {
+          "name": "Background color"
+        },
+        "message": {
+          "name": "Message"
+        },
+        "message_color": {
+          "name": "Message color"
+        },
+        "message_size": {
+          "name": "Message size"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "title_color": {
+          "name": "Title color"
+        },
+        "title_size": {
+          "name": "Title size"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        },
+        "text_overlay": {
+          "name": "Text over media"
+        },
+        "actions": {
+          "name": "Overlay buttons",
+          "description": "Up to three buttons shown under the popup. Leave this out to use the door button paired with this camera in the receiver settings, or set it to an empty list to show no buttons. The popup takes remote focus, each button needs a second press to confirm (unless confirm is false), and Home Assistant runs the button's action only if it is pressed before the popup expires. Requires overlay permission on the receiver."
+        }
+      }
+    },
+    "show_notification": {
+      "name": "Show notification",
+      "description": "Show a styled text notification on a paired Android TV receiver.",
+      "fields": {
+        "background_color": {
+          "name": "Background color"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "enter_pip": {
+          "name": "Enter PiP"
+        },
+        "message": {
+          "name": "Message"
+        },
+        "message_color": {
+          "name": "Message color"
+        },
+        "message_size": {
+          "name": "Message size"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "title": {
+          "name": "Title"
+        },
+        "title_color": {
+          "name": "Title color"
+        },
+        "title_size": {
+          "name": "Title size"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        },
+        "actions": {
+          "name": "Overlay buttons",
+          "description": "Up to three buttons shown under the popup. Leave this out to use the door button paired with this camera in the receiver settings, or set it to an empty list to show no buttons. The popup takes remote focus, each button needs a second press to confirm (unless confirm is false), and Home Assistant runs the button's action only if it is pressed before the popup expires. Requires overlay permission on the receiver."
+        }
+      }
+    },
+    "test_camera_stream": {
+      "name": "Test camera stream",
+      "description": "Check which stream formats Home Assistant can resolve for a camera and receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "stream_type": {
+          "name": "Preferred stream strategy"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "save_recommendation": {
+          "name": "Save recommendation"
+        }
+      }
+    },
+    "setup_camera": {
+      "name": "Set up camera",
+      "description": "Guide camera setup by calibrating normal streams or validating and saving a manual restream URL.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "restream_base_url": {
+          "name": "Restream base URL"
+        },
+        "stream_type": {
+          "name": "Preferred stream strategy"
+        },
+        "check_reachability": {
+          "name": "Check reachability"
+        },
+        "save": {
+          "name": "Save"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        }
+      }
+    },
+    "calibrate_camera": {
+      "name": "Calibrate camera",
+      "description": "Test a camera against a paired receiver and optionally save the recommended per-camera defaults.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "stream_type": {
+          "name": "Preferred stream strategy"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        },
+        "save": {
+          "name": "Save"
+        }
+      }
+    },
+    "set_camera_defaults": {
+      "name": "Set camera defaults",
+      "description": "Store per-camera defaults for a paired receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "stream_type": {
+          "name": "Preferred stream strategy"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        }
+      }
+    },
+    "clear_camera_defaults": {
+      "name": "Clear camera defaults",
+      "description": "Remove stored per-camera defaults for a paired receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        }
+      }
+    },
+    "clear_all_camera_defaults": {
+      "name": "Clear all camera defaults",
+      "description": "Remove all stored per-camera defaults for a paired receiver."
+    },
+    "suggest_restream_source": {
+      "name": "Suggest restream source",
+      "description": "Suggest manual restream source setup values for a camera and receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "restream_base_url": {
+          "name": "Restream base URL"
+        }
+      }
+    },
+    "test_restream_source": {
+      "name": "Test restream source",
+      "description": "Validate a candidate HLS or MJPEG restream URL before saving it as a camera default.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "check_reachability": {
+          "name": "Check reachability"
+        },
+        "save": {
+          "name": "Save if valid"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        }
+      }
+    },
+    "save_restream_source": {
+      "name": "Save restream source",
+      "description": "Save a tested HLS or MJPEG restream URL as the camera default for a paired receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "stream_type": {
+          "name": "Restream type"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        }
+      }
+    }
+  },
+  "issues": {
+    "receiver_version_mismatch": {
+      "title": "HA TV PiP Plus receiver version mismatch",
+      "description": "{receiver} is running Android receiver version {receiver_version}, but the Home Assistant integration is version {integration_version}. Install the Android APK and Home Assistant integration from the same GitHub Release before troubleshooting playback, pairing, or remote receiver issues."
+    },
+    "receiver_overlay_permission": {
+      "title": "{receiver} can't show door buttons",
+      "description": "The HA TV PiP Plus app on {receiver} isn't allowed to display over other apps, so popups open full screen without buttons.\n\nTo fix it, open the TV's device page in Home Assistant and press **Grant Overlay Permission** (USB debugging must be on in the TV's developer options; accept the 'Allow debugging?' prompt on the TV the first time). Or, on the TV, open HA TV PiP Plus and select **Overlay Settings**."
+    }
+  }
+}

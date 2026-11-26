@@ -4,14 +4,14 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
-from custom_components.ha_tv_pip.const import (
+from custom_components.ha_tv_pip_plus.const import (
     CONF_HOST,
     CONF_PORT,
     CONF_REMOTE_ACCESS_TOKEN,
     CONF_REMOTE_HOME_ASSISTANT_URL,
     CONF_TOKEN,
 )
-from custom_components.ha_tv_pip.remote_setup import (
+from custom_components.ha_tv_pip_plus.remote_setup import (
     async_sync_remote_setup,
     async_sync_remote_setup_values,
     has_remote_setup_options,
@@ -46,7 +46,7 @@ def test_resolved_remote_setup_falls_back_to_suggested_url(monkeypatch) -> None:
         options={CONF_REMOTE_ACCESS_TOKEN: "remote-token"},
     )
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.remote_setup.suggested_remote_home_assistant_url",
+        "custom_components.ha_tv_pip_plus.remote_setup.suggested_remote_home_assistant_url",
         lambda hass: "https://suggested.example.test",
     )
 
@@ -100,7 +100,7 @@ def test_async_sync_remote_setup_pushes_receiver_settings(monkeypatch) -> None: 
         return True
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.remote_setup.async_set_remote_configuration",
+        "custom_components.ha_tv_pip_plus.remote_setup.async_set_remote_configuration",
         fake_set_remote_configuration,
     )
 
@@ -147,7 +147,7 @@ def test_async_sync_remote_setup_clears_receiver_settings(monkeypatch) -> None: 
         return True
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip.remote_setup.async_clear_remote_configuration",
+        "custom_components.ha_tv_pip_plus.remote_setup.async_clear_remote_configuration",
         fake_clear_remote_configuration,
     )
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">HA TV PiP Receiver</string>
-    <string name="main_title">HA TV PiP Receiver</string>
+    <string name="app_name">HA TV PiP Plus Receiver</string>
+    <string name="main_title">HA TV PiP Plus Receiver</string>
     <string name="main_status_summary">Ricevitore %1$s | Remoto %2$s | Launcher %3$s</string>
     <string name="section_pip_controls">Controlli PiP</string>
     <string name="section_remote_receiver">Ricevitore remoto</string>
@@ -56,7 +56,7 @@
     <string name="status_saved">Salvato</string>
     <string name="remote_setup_saved">Configurazione remota salvata</string>
     <string name="remote_use_ha_to_sync">Usa HA per sincronizzare</string>
-    <string name="remote_receiver_help">Home Assistant può configurarlo per te. La configurazione manuale rimane disponibile per la risoluzione avanzata dei problemi. La modalità remota si connette in uscita alla tua istanza Home Assistant; non è un servizio cloud HA TV PiP.</string>
+    <string name="remote_receiver_help">Home Assistant può configurarlo per te. La configurazione manuale rimane disponibile per la risoluzione avanzata dei problemi. La modalità remota si connette in uscita alla tua istanza Home Assistant; non è un servizio cloud HA TV PiP Plus.</string>
     <string name="remote_details_saved">I dettagli del ricevitore remoto sono salvati</string>
     <string name="remote_details_not_configured">I dettagli del ricevitore remoto non sono configurati</string>
     <string name="remote_details_saved_description">Questa TV può connettersi in uscita a Home Assistant per comandi PiP esterni.</string>
@@ -72,7 +72,7 @@
     <string name="state_value">Stato: %1$s</string>
     <string name="last_error_value">Ultimo errore: %1$s</string>
     <string name="launcher_icon_value">Icona launcher: %1$s</string>
-    <string name="launcher_help">Se nascosta, Home Assistant può riaprire questa schermata con il pulsante Apri launcher. Puoi anche recuperarla da Impostazioni Android &gt; App &gt; HA TV PiP.</string>
+    <string name="launcher_help">Se nascosta, Home Assistant può riaprire questa schermata con il pulsante Apri launcher. Puoi anche recuperarla da Impostazioni Android &gt; App &gt; HA TV PiP Plus.</string>
     <string name="launcher_pair_before_hiding">Associa questo ricevitore prima di nascondere l’icona launcher.</string>
     <string name="pairing_code_value">Codice di associazione: %1$s</string>
     <string name="waiting_for_value">In attesa di: %1$s</string>
@@ -101,7 +101,7 @@
     <string name="action_try_pip">Prova PiP</string>
     <string name="test_video_title">Video di test</string>
     <string name="pip_subtitle_camera_preview">Anteprima videocamera smart home</string>
-    <string name="notification_title">HA TV PiP Receiver</string>
+    <string name="notification_title">HA TV PiP Plus Receiver</string>
     <string name="notification_local_control_running">Endpoint di controllo locale attivo sulla porta %1$d</string>
     <string name="notification_channel_local_control">Controllo locale</string>
     <string name="compatibility_supported">Supportato</string>
@@ -140,7 +140,7 @@
     <string name="setup_step_remote">3. Usa Home Assistant per sincronizzare le impostazioni del ricevitore remoto quando vuoi che questa TV riceva comandi PiP esterni.</string>
     <string name="troubleshooting_discovery">Rilevamento: tieni TV e Home Assistant sulla stessa rete e verifica che l’endpoint locale sia attivo.</string>
     <string name="troubleshooting_remote">Ricevitore remoto: controlla che Home Assistant abbia salvato URL esterno e token, poi usa Sincronizza configurazione remota.</string>
-    <string name="troubleshooting_launcher">Launcher nascosto: usa Apri launcher in Home Assistant o Impostazioni Android &gt; App &gt; HA TV PiP per riaprire questa schermata.</string>
+    <string name="troubleshooting_launcher">Launcher nascosto: usa Apri launcher in Home Assistant o Impostazioni Android &gt; App &gt; HA TV PiP Plus per riaprire questa schermata.</string>
     <string name="overlay_action_confirm">Premi di nuovo per confermare</string>
     <string name="overlay_action_working">In corso…</string>
     <string name="overlay_action_done">✓ Fatto</string>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">HA TV PiP Receiver</string>
-    <string name="main_title">HA TV PiP Receiver</string>
+    <string name="app_name">HA TV PiP Plus Receiver</string>
+    <string name="main_title">HA TV PiP Plus Receiver</string>
     <string name="main_status_summary">Odbiornik %1$s | Zdalnie %2$s | Launcher %3$s</string>
     <string name="section_pip_controls">Sterowanie PiP</string>
     <string name="section_remote_receiver">Odbiornik zdalny</string>
@@ -56,7 +56,7 @@
     <string name="status_saved">Zapisano</string>
     <string name="remote_setup_saved">Zapisano konfigurację zdalną</string>
     <string name="remote_use_ha_to_sync">Użyj HA do synchronizacji</string>
-    <string name="remote_receiver_help">Home Assistant może skonfigurować to za Ciebie. Ręczna konfiguracja nadal jest dostępna do zaawansowanego rozwiązywania problemów. Tryb zdalny łączy się wychodząco z Twoją własną instancją Home Assistant; nie jest to usługa chmurowa HA TV PiP.</string>
+    <string name="remote_receiver_help">Home Assistant może skonfigurować to za Ciebie. Ręczna konfiguracja nadal jest dostępna do zaawansowanego rozwiązywania problemów. Tryb zdalny łączy się wychodząco z Twoją własną instancją Home Assistant; nie jest to usługa chmurowa HA TV PiP Plus.</string>
     <string name="remote_details_saved">Szczegóły odbiornika zdalnego są zapisane</string>
     <string name="remote_details_not_configured">Szczegóły odbiornika zdalnego nie są skonfigurowane</string>
     <string name="remote_details_saved_description">Ten telewizor może łączyć się wychodząco z Home Assistant dla zewnętrznych poleceń PiP.</string>
@@ -72,7 +72,7 @@
     <string name="state_value">Stan: %1$s</string>
     <string name="last_error_value">Ostatni błąd: %1$s</string>
     <string name="launcher_icon_value">Ikona launchera: %1$s</string>
-    <string name="launcher_help">Jeśli jest ukryta, Home Assistant może ponownie otworzyć ten ekran przyciskiem Otwórz launcher. Możesz też odzyskać dostęp przez Ustawienia Androida &gt; Aplikacje &gt; HA TV PiP.</string>
+    <string name="launcher_help">Jeśli jest ukryta, Home Assistant może ponownie otworzyć ten ekran przyciskiem Otwórz launcher. Możesz też odzyskać dostęp przez Ustawienia Androida &gt; Aplikacje &gt; HA TV PiP Plus.</string>
     <string name="launcher_pair_before_hiding">Sparuj ten odbiornik, zanim ukryjesz ikonę launchera.</string>
     <string name="pairing_code_value">Kod parowania: %1$s</string>
     <string name="waiting_for_value">Oczekiwanie na: %1$s</string>
@@ -101,7 +101,7 @@
     <string name="action_try_pip">Spróbuj PiP</string>
     <string name="test_video_title">Film testowy</string>
     <string name="pip_subtitle_camera_preview">Podgląd kamery smart home</string>
-    <string name="notification_title">HA TV PiP Receiver</string>
+    <string name="notification_title">HA TV PiP Plus Receiver</string>
     <string name="notification_local_control_running">Lokalny endpoint sterowania działa na porcie %1$d</string>
     <string name="notification_channel_local_control">Sterowanie lokalne</string>
     <string name="compatibility_supported">Obsługiwane</string>
@@ -140,7 +140,7 @@
     <string name="setup_step_remote">3. Użyj Home Assistant, aby zsynchronizować ustawienia odbiornika zdalnego, gdy ten telewizor ma odbierać zewnętrzne polecenia PiP.</string>
     <string name="troubleshooting_discovery">Wykrywanie: trzymaj TV i Home Assistant w tej samej sieci i sprawdź, czy lokalny endpoint działa.</string>
     <string name="troubleshooting_remote">Odbiornik zdalny: sprawdź, czy Home Assistant zapisał zewnętrzny URL i token, potem użyj Synchronizuj konfigurację zdalną.</string>
-    <string name="troubleshooting_launcher">Ukryty launcher: użyj Otwórz launcher w Home Assistant albo Ustawienia Androida &gt; Aplikacje &gt; HA TV PiP, aby ponownie otworzyć ten ekran.</string>
+    <string name="troubleshooting_launcher">Ukryty launcher: użyj Otwórz launcher w Home Assistant albo Ustawienia Androida &gt; Aplikacje &gt; HA TV PiP Plus, aby ponownie otworzyć ten ekran.</string>
     <string name="overlay_action_confirm">Naciśnij ponownie, aby potwierdzić</string>
     <string name="overlay_action_working">Trwa wykonywanie…</string>
     <string name="overlay_action_done">✓ Gotowe</string>

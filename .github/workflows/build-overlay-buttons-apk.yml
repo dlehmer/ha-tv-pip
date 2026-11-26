@@ -47,7 +47,7 @@ jobs:
         run: |
           mkdir -p dist
           cp android-tv-app/app/build/outputs/apk/debug/app-debug.apk dist/ha-tv-pip-door-buttons-debug.apk
-          (cd custom_components && zip -qr ../dist/ha_tv_pip-door-buttons.zip ha_tv_pip -x '*__pycache__*')
+          (cd custom_components && zip -qr ../dist/ha_tv_pip_plus-door-buttons.zip ha_tv_pip_plus -x '*__pycache__*')
 
       - name: Upload APK and integration
         uses: actions/upload-artifact@v4

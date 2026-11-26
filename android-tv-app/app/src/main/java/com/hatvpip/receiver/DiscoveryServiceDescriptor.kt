@@ -7,7 +7,7 @@ data class DiscoveryServiceDescriptor(
     val attributes: Map<String, String>
 ) {
     companion object {
-        const val SERVICE_TYPE = "_ha-tv-pip._tcp."
+        const val SERVICE_TYPE = "_ha-tv-pip-plus._tcp."
         const val API_VERSION = "1"
 
         fun create(

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">HA TV PiP Receiver</string>
-    <string name="main_title">HA TV PiP Receiver</string>
+    <string name="app_name">HA TV PiP Plus Receiver</string>
+    <string name="main_title">HA TV PiP Plus Receiver</string>
     <string name="main_status_summary">Receiver is %1$s | Remote %2$s | Launcher %3$s</string>
 
     <string name="section_pip_controls">PiP controls</string>
@@ -64,7 +64,7 @@
 
     <string name="remote_setup_saved">Remote setup saved</string>
     <string name="remote_use_ha_to_sync">Use HA to sync setup</string>
-    <string name="remote_receiver_help">Home Assistant can provision this for you. Manual setup remains available here for advanced troubleshooting. Remote mode connects outbound to your own Home Assistant instance; it is not a HA TV PiP cloud service.</string>
+    <string name="remote_receiver_help">Home Assistant can provision this for you. Manual setup remains available here for advanced troubleshooting. Remote mode connects outbound to your own Home Assistant instance; it is not a HA TV PiP Plus cloud service.</string>
     <string name="remote_details_saved">Remote receiver details are saved</string>
     <string name="remote_details_not_configured">Remote receiver details are not configured</string>
     <string name="remote_details_saved_description">This TV can connect outbound to Home Assistant for external PiP commands.</string>
@@ -82,7 +82,7 @@
     <string name="state_value">State: %1$s</string>
     <string name="last_error_value">Last error: %1$s</string>
     <string name="launcher_icon_value">Launcher icon: %1$s</string>
-    <string name="launcher_help">If hidden, Home Assistant can reopen this screen with the Open Launcher button. You can also recover from Android Settings &gt; Apps &gt; HA TV PiP.</string>
+    <string name="launcher_help">If hidden, Home Assistant can reopen this screen with the Open Launcher button. You can also recover from Android Settings &gt; Apps &gt; HA TV PiP Plus.</string>
     <string name="launcher_pair_before_hiding">Pair this receiver before hiding the launcher icon.</string>
     <string name="pairing_code_value">Pairing code: %1$s</string>
     <string name="waiting_for_value">Waiting for: %1$s</string>
@@ -111,7 +111,7 @@
     <string name="test_video_title">Test Video</string>
     <string name="pip_subtitle_camera_preview">Smart home camera preview</string>
     <string name="notification_default_title" translatable="false">Home Assistant</string>
-    <string name="notification_title">HA TV PiP Receiver</string>
+    <string name="notification_title">HA TV PiP Plus Receiver</string>
     <string name="notification_local_control_running">Local control endpoint running on port %1$d</string>
     <string name="notification_channel_local_control">Local Control</string>
 
@@ -158,5 +158,5 @@
     <string name="setup_step_remote">3. Use Home Assistant to sync remote receiver settings when you want this TV to receive external PiP commands.</string>
     <string name="troubleshooting_discovery">Discovery: keep the TV and Home Assistant on the same network and make sure the local endpoint is running.</string>
     <string name="troubleshooting_remote">Remote receiver: check that Home Assistant saved the external URL and token, then use Sync Remote Config.</string>
-    <string name="troubleshooting_launcher">Hidden launcher: use Home Assistant Open Launcher or Android Settings &gt; Apps &gt; HA TV PiP to reopen this screen.</string>
+    <string name="troubleshooting_launcher">Hidden launcher: use Home Assistant Open Launcher or Android Settings &gt; Apps &gt; HA TV PiP Plus to reopen this screen.</string>
 </resources>

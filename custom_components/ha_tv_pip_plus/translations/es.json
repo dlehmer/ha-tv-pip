@@ -1,0 +1,552 @@
+{
+  "config": {
+    "abort": {
+      "invalid_discovery": "Home Assistant encontró un receptor HA TV PiP Plus, pero los datos de descubrimiento estaban incompletos."
+    },
+    "error": {
+      "already_paired": "Este receptor ya está emparejado. Usa Restablecer emparejamiento en la app de TV y vuelve a intentarlo.",
+      "cannot_connect": "No se pudo conectar con el receptor Android TV.",
+      "invalid_client": "El receptor rechazó esta sesión de emparejamiento de Home Assistant.",
+      "invalid_code": "Introduce el código de emparejamiento de seis dígitos que aparece en la TV.",
+      "invalid_host": "Introduce la dirección IP o el nombre de host del receptor Android TV.",
+      "invalid_port": "Introduce un puerto válido entre 1 y 65535.",
+      "pairing_not_started": "Inicia el emparejamiento de nuevo e introduce el nuevo código que aparece en la TV."
+    },
+    "step": {
+      "confirm": {
+        "data": {
+          "name": "Nombre del receptor"
+        },
+        "description": "Home Assistant descubrió {name} en {host}:{port}. ¿Añadir este receptor Android TV?",
+        "title": "Añadir receptor HA TV PiP Plus descubierto"
+      },
+      "pair": {
+        "data": {
+          "code": "Código de emparejamiento"
+        },
+        "description": "Introduce el código de emparejamiento de seis dígitos que aparece en {name}. El receptor está en {host}:{port}.",
+        "title": "Emparejar receptor HA TV PiP Plus"
+      },
+      "user": {
+        "data": {
+          "host": "Host del receptor",
+          "port": "Puerto del receptor"
+        },
+        "description": "Usa la configuración manual si Home Assistant no ha descubierto automáticamente el receptor Android TV.",
+        "title": "Añadir receptor HA TV PiP Plus"
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "cannot_connect": "No se pudieron enviar los ajustes del receptor remoto al receptor Android TV. Comprueba que la TV esté en línea y emparejada.",
+      "remote_fields_required": "Introduce la URL externa de Home Assistant y el token de acceso, o deja ambos campos vacíos para desactivar el modo de receptor remoto.",
+      "invalid_default_duration": "Default duration must be 0 or between 1 and 3600 seconds.",
+      "invalid_default_overlay_size": "Default width and height must be 0 or within the supported overlay size range.",
+      "invalid_default_position": "Choose a supported popup position.",
+      "invalid_default_stream_type": "Choose a supported stream strategy."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "default_duration_seconds": "Default duration",
+          "default_snapshot_fallback": "Snapshot fallback by default",
+          "default_stream_type": "Preferred stream strategy",
+          "prefer_remote_transport": "Preferir transporte remoto",
+          "show_advanced_options": "Mostrar ajustes avanzados"
+        },
+        "description": "Set everyday receiver defaults. Advanced popup size, position, and remote receiver credentials are hidden unless needed.",
+        "title": "Receiver defaults"
+      },
+      "advanced": {
+        "data": {
+          "default_height": "Default height",
+          "default_position": "Default position",
+          "default_width": "Default width",
+          "remote_access_token": "Token de acceso de larga duración de Home Assistant",
+          "remote_home_assistant_url": "URL externa de Home Assistant"
+        },
+        "description": "Set advanced popup defaults and optional remote receiver settings. Use 0 for width or height to keep the built-in service default. Remote receiver settings are sent to the paired TV over the local connection. Suggested external URL: {suggested_url}",
+        "title": "Advanced receiver setup"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connected": {
+        "name": "Conectado"
+      },
+      "camera_restreaming_recommended": {
+        "name": "Restreaming de cámara recomendado"
+      },
+      "remote_connected": {
+        "name": "Remote Connected"
+      }
+    },
+    "button": {
+      "close_pip": {
+        "name": "Cerrar PiP"
+      },
+      "open_launcher": {
+        "name": "Abrir lanzador"
+      },
+      "sync_remote_config": {
+        "name": "Sincronizar configuración remota"
+      },
+      "test_pip": {
+        "name": "Probar PiP"
+      },
+      "refresh_status": {
+        "name": "Refresh Status"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Estado"
+      },
+      "display_mode": {
+        "name": "Active Display Mode"
+      },
+      "last_error": {
+        "name": "Last Receiver Error"
+      },
+      "last_camera_result": {
+        "name": "Last Camera Result"
+      },
+      "last_command_result": {
+        "name": "Last Command Result"
+      },
+      "receiver_version": {
+        "name": "Receiver Version"
+      },
+      "receiver_compatibility": {
+        "name": "Receiver Compatibility"
+      },
+      "stream_type": {
+        "name": "Active Stream Type"
+      },
+      "last_camera_compatibility": {
+        "name": "Last Camera Compatibility"
+      },
+      "restreaming_provider_status": {
+        "name": "Restreaming Provider Status"
+      }
+    },
+    "switch": {
+      "hide_launcher": {
+        "name": "Ocultar lanzador"
+      }
+    }
+  },
+  "services": {
+    "show_camera": {
+      "name": "Mostrar cámara",
+      "description": "Muestra un flujo o una imagen de cámara de Home Assistant en un receptor Android TV emparejado.",
+      "fields": {
+        "camera_entity": {
+          "name": "Entidad de cámara"
+        },
+        "duration_seconds": {
+          "name": "Duración"
+        },
+        "enter_pip": {
+          "name": "Entrar en PiP"
+        },
+        "snapshot_camera_entity": {
+          "name": "Cámara de imagen de reserva"
+        },
+        "snapshot_fallback": {
+          "name": "Imagen de reserva"
+        },
+        "stream_camera_entity": {
+          "name": "Entidad de cámara de transmisión"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "stream_type": {
+          "name": "Tipo de flujo"
+        },
+        "title": {
+          "name": "Título"
+        },
+        "background_color": {
+          "name": "Background color"
+        },
+        "message": {
+          "name": "Message"
+        },
+        "message_color": {
+          "name": "Message color"
+        },
+        "message_size": {
+          "name": "Message size"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "title_color": {
+          "name": "Title color"
+        },
+        "title_size": {
+          "name": "Title size"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        },
+        "text_overlay": {
+          "name": "Texto sobre medios"
+        }
+      }
+    },
+    "show_snapshot": {
+      "name": "Mostrar imagen",
+      "description": "Muestra una imagen de cámara en un receptor Android TV emparejado.",
+      "fields": {
+        "camera_entity": {
+          "name": "Entidad de cámara"
+        },
+        "duration_seconds": {
+          "name": "Duración"
+        },
+        "enter_pip": {
+          "name": "Entrar en PiP"
+        },
+        "title": {
+          "name": "Título"
+        },
+        "background_color": {
+          "name": "Background color"
+        },
+        "message": {
+          "name": "Message"
+        },
+        "message_color": {
+          "name": "Message color"
+        },
+        "message_size": {
+          "name": "Message size"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "title_color": {
+          "name": "Title color"
+        },
+        "title_size": {
+          "name": "Title size"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        },
+        "text_overlay": {
+          "name": "Texto sobre medios"
+        }
+      }
+    },
+    "show_notification": {
+      "name": "Show notification",
+      "description": "Show a styled text notification on a paired Android TV receiver.",
+      "fields": {
+        "background_color": {
+          "name": "Background color"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "enter_pip": {
+          "name": "Enter PiP"
+        },
+        "message": {
+          "name": "Message"
+        },
+        "message_color": {
+          "name": "Message color"
+        },
+        "message_size": {
+          "name": "Message size"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "title": {
+          "name": "Title"
+        },
+        "title_color": {
+          "name": "Title color"
+        },
+        "title_size": {
+          "name": "Title size"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        }
+      }
+    },
+    "test_camera_stream": {
+      "name": "Test camera stream",
+      "description": "Check which stream formats Home Assistant can resolve for a camera and receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "stream_type": {
+          "name": "Preferred stream strategy"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "save_recommendation": {
+          "name": "Save recommendation"
+        }
+      }
+    },
+    "set_camera_defaults": {
+      "name": "Set camera defaults",
+      "description": "Store per-camera defaults for a paired receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "stream_type": {
+          "name": "Preferred stream strategy"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        }
+      }
+    },
+    "clear_camera_defaults": {
+      "name": "Clear camera defaults",
+      "description": "Remove stored per-camera defaults for a paired receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        }
+      }
+    },
+    "clear_all_camera_defaults": {
+      "name": "Clear all camera defaults",
+      "description": "Remove all stored per-camera defaults for a paired receiver."
+    },
+    "suggest_restream_source": {
+      "name": "Suggest restream source",
+      "description": "Suggest manual restream source setup values for a camera and receiver.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "restream_base_url": {
+          "name": "Restream base URL"
+        }
+      }
+    },
+    "test_restream_source": {
+      "name": "Test restream source",
+      "description": "Validate a candidate HLS or MJPEG restream URL before saving it as a camera default.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "check_reachability": {
+          "name": "Check reachability"
+        },
+        "save": {
+          "name": "Save if valid"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        }
+      }
+    },
+    "setup_camera": {
+      "name": "Set up camera",
+      "description": "Guide camera setup by calibrating normal streams or validating and saving a manual restream URL.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "restream_base_url": {
+          "name": "Restream base URL"
+        },
+        "stream_type": {
+          "name": "Preferred stream strategy"
+        },
+        "check_reachability": {
+          "name": "Check reachability"
+        },
+        "save": {
+          "name": "Save"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        }
+      }
+    },
+    "calibrate_camera": {
+      "name": "Calibrate camera",
+      "description": "Test a camera against a paired receiver and optionally save the recommended per-camera defaults.",
+      "fields": {
+        "camera_entity": {
+          "name": "Camera entity"
+        },
+        "stream_camera_entity": {
+          "name": "Stream camera entity"
+        },
+        "restream_url": {
+          "name": "Restream URL"
+        },
+        "restream_provider": {
+          "name": "Restream provider"
+        },
+        "snapshot_camera_entity": {
+          "name": "Snapshot fallback camera entity"
+        },
+        "stream_type": {
+          "name": "Preferred stream strategy"
+        },
+        "duration_seconds": {
+          "name": "Duration"
+        },
+        "position": {
+          "name": "Position"
+        },
+        "snapshot_fallback": {
+          "name": "Snapshot fallback"
+        },
+        "width": {
+          "name": "Width"
+        },
+        "height": {
+          "name": "Height"
+        },
+        "save": {
+          "name": "Save"
+        }
+      }
+    },
+    "save_restream_source": {
+      "name": "Guardar fuente restream",
+      "description": "Guarda una URL restream HLS o MJPEG probada como valor predeterminado de cámara para un receptor emparejado.",
+      "fields": {
+        "camera_entity": {
+          "name": "Entidad de cámara"
+        },
+        "restream_url": {
+          "name": "URL restream"
+        },
+        "restream_provider": {
+          "name": "Proveedor restream"
+        },
+        "snapshot_camera_entity": {
+          "name": "Entidad de cámara de captura alternativa"
+        },
+        "snapshot_fallback": {
+          "name": "Captura alternativa"
+        },
+        "stream_type": {
+          "name": "Tipo restream"
+        },
+        "duration_seconds": {
+          "name": "Duración"
+        },
+        "position": {
+          "name": "Posición"
+        },
+        "width": {
+          "name": "Anchura"
+        },
+        "height": {
+          "name": "Altura"
+        }
+      }
+    }
+  },
+  "issues": {
+    "receiver_version_mismatch": {
+      "title": "La versión del receptor HA TV PiP Plus no coincide",
+      "description": "{receiver} ejecuta la versión {receiver_version} del receptor Android, pero la integración de Home Assistant está en la versión {integration_version}. Instala el APK de Android y la integración de Home Assistant desde la misma GitHub Release antes de diagnosticar problemas de reproducción, emparejamiento o receptor remoto."
+    }
+  }
+}

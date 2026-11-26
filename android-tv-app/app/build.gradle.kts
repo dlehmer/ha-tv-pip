@@ -35,11 +35,11 @@ android {
     buildToolsVersion = "37.0.0"
 
     defaultConfig {
-        applicationId = "com.hatvpip.receiver"
+        applicationId = "com.dlehmer.hatvpipplus"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1032000
-        versionName = "1.32.0"
+        versionCode = 1033000
+        versionName = "1.33.0"
         buildConfigField(
             "boolean",
             "EXPERIMENTAL_OVERLAY_BACKGROUND_BLUR",

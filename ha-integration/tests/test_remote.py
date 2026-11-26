@@ -1,4 +1,4 @@
-"""Tests for remote HA TV PiP receiver transport."""
+"""Tests for remote HA TV PiP Plus receiver transport."""
 
 import asyncio
 import sys
@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from custom_components.ha_tv_pip.client import ShowCameraCommand
-from custom_components.ha_tv_pip.const import CONF_DEVICE_ID, CONF_TOKEN, DOMAIN
-from custom_components.ha_tv_pip.remote import (
+from custom_components.ha_tv_pip_plus.client import ShowCameraCommand
+from custom_components.ha_tv_pip_plus.const import CONF_DEVICE_ID, CONF_TOKEN, DOMAIN
+from custom_components.ha_tv_pip_plus.remote import (
     EVENT_RECEIVER_COMMAND,
     WS_TYPE_REGISTER,
     WS_TYPE_STATUS_RESPONSE,
@@ -183,7 +183,7 @@ def test_remote_registry_sends_status_command_and_resolves_response() -> None:
             device_id="device-1",
             request_id=1,
             status={
-                "app": "HA TV PiP Receiver",
+                "app": "HA TV PiP Plus Receiver",
                 "version": "1.30.0",
                 "deviceId": "device-1",
                 "deviceName": "Travel TV",

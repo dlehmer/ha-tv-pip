@@ -1,5 +1,12 @@
 # What's New ✨
 
+## 1.33.0 - HA TV PiP Plus: Door Buttons 🔓
+
+- Renamed to HA TV PiP Plus so it installs alongside the original app 📦
+- Camera popups can show a door button: unlock, open a garage, or run a script 🚪
+- Buttons take remote focus and need two presses; Back or the timeout closes them ✅
+- Home Assistant can install the TV app and grant overlay permission over ADB 🛠️
+
 ## 1.32.0 - Silent Camera PiP 🔇
 
 - Muted camera streams by default so PiP and overlay alerts do not interrupt the TV's current audio 📺

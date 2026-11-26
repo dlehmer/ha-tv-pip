@@ -1,4 +1,4 @@
-"""Tests for HA TV PiP Home Assistant services."""
+"""Tests for HA TV PiP Plus Home Assistant services."""
 
 import asyncio
 import sys
@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 
-from custom_components.ha_tv_pip.client import (
+from custom_components.ha_tv_pip_plus.client import (
     ReceiverCapabilities,
     ReceiverClientError,
     ShowCameraCommand,
 )
-from custom_components.ha_tv_pip.const import (
+from custom_components.ha_tv_pip_plus.const import (
     CONF_CAMERA_DEFAULTS,
     CONF_DEFAULT_DURATION_SECONDS,
     CONF_DEFAULT_HEIGHT,
@@ -28,8 +28,8 @@ from custom_components.ha_tv_pip.const import (
     CONF_PREFER_REMOTE_TRANSPORT,
     CONF_TOKEN,
 )
-from custom_components.ha_tv_pip.restreaming import restreaming_provider_metadata
-from custom_components.ha_tv_pip.services import (
+from custom_components.ha_tv_pip_plus.restreaming import restreaming_provider_metadata
+from custom_components.ha_tv_pip_plus.services import (
     ATTR_BACKGROUND_COLOR,
     ATTR_CAMERA_ENTITY,
     ATTR_CHECK_REACHABILITY,
@@ -890,7 +890,7 @@ def test_show_camera_command_uses_external_urls_for_remote_receiver(
 def test_show_camera_service_prefers_connected_remote_receiver(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     sent: dict[str, Any] = {}
 
@@ -974,7 +974,7 @@ def test_show_camera_service_prefers_connected_remote_receiver(
 def test_show_camera_service_defaults_to_local_http_when_remote_connected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     sent: dict[str, Any] = {}
 
@@ -1067,7 +1067,7 @@ def test_show_camera_service_defaults_to_local_http_when_remote_connected(
 def test_show_camera_service_falls_back_to_local_http_when_remote_disconnected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     sent: dict[str, Any] = {}
 
@@ -1160,7 +1160,7 @@ def test_show_camera_service_falls_back_to_local_http_when_remote_disconnected(
 def test_show_camera_service_uses_local_http_when_remote_preference_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     sent: dict[str, Any] = {}
 
@@ -1254,7 +1254,7 @@ def test_show_camera_service_uses_local_http_when_remote_preference_disabled(
 def test_show_camera_service_falls_back_to_remote_when_local_first_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     sent: dict[str, Any] = {}
 
@@ -1337,7 +1337,7 @@ def test_show_camera_service_falls_back_to_remote_when_local_first_fails(
 def test_show_camera_service_applies_receiver_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     captured: dict[str, Any] = {}
 
@@ -1433,7 +1433,7 @@ def test_show_camera_service_applies_receiver_defaults(
 def test_show_camera_service_keeps_explicit_values_over_receiver_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     captured: dict[str, Any] = {}
 
@@ -1539,7 +1539,7 @@ def test_show_camera_service_keeps_explicit_values_over_receiver_defaults(
 def test_show_notification_service_applies_receiver_popup_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     sent: dict[str, Any] = {}
 
@@ -1609,7 +1609,7 @@ def test_show_notification_service_applies_receiver_popup_defaults(
         "position": "bottom_right",
         "width": 512,
     }
-    command_result = hass.data["ha_tv_pip"]["last_command_result"]["entry-1"]
+    command_result = hass.data["ha_tv_pip_plus"]["last_command_result"]["entry-1"]
     assert command_result["command_type"] == "show_notification"
     assert command_result["status"] == "accepted"
     assert command_result["final_stream_type"] == "notification"
@@ -1617,7 +1617,7 @@ def test_show_notification_service_applies_receiver_popup_defaults(
 
 
 def test_set_camera_defaults_persists_per_camera_options() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -1686,7 +1686,7 @@ def test_set_camera_defaults_persists_per_camera_options() -> None:
 
 
 def test_save_restream_source_persists_go2rtc_hls_defaults() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -1753,7 +1753,7 @@ def test_save_restream_source_persists_go2rtc_hls_defaults() -> None:
         },
         "next_action": {
             "service": "show_camera",
-            "action": "ha_tv_pip.show_camera",
+            "action": "ha_tv_pip_plus.show_camera",
             "target": {ATTR_DEVICE_ID: "device-1"},
             "data": {ATTR_CAMERA_ENTITY: "camera.front_door"},
         },
@@ -1766,7 +1766,7 @@ def test_save_restream_source_persists_go2rtc_hls_defaults() -> None:
 
 
 def test_save_restream_source_can_save_mjpeg_defaults() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -1829,7 +1829,7 @@ def test_save_restream_source_can_save_mjpeg_defaults() -> None:
 def test_show_camera_service_applies_per_camera_defaults_before_receiver_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     captured: dict[str, Any] = {}
 
@@ -1951,7 +1951,7 @@ def test_show_camera_service_applies_per_camera_defaults_before_receiver_default
 
 
 def test_clear_camera_defaults_removes_stored_camera_options() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -1984,7 +1984,7 @@ def test_clear_camera_defaults_removes_stored_camera_options() -> None:
 
 
 def test_clear_all_camera_defaults_removes_all_stored_camera_options() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -2022,7 +2022,7 @@ def test_clear_all_camera_defaults_removes_all_stored_camera_options() -> None:
 
 
 def test_suggest_restream_source_returns_manual_go2rtc_plan() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -2078,7 +2078,7 @@ def test_suggest_restream_source_returns_manual_go2rtc_plan() -> None:
     }
     assert result["save_action"] == {
         "service": "save_restream_source",
-        "action": "ha_tv_pip.save_restream_source",
+        "action": "ha_tv_pip_plus.save_restream_source",
         "target": {ATTR_DEVICE_ID: "device-1"},
         "data": {
             ATTR_CAMERA_ENTITY: "camera.front_door_bell_main",
@@ -2091,7 +2091,7 @@ def test_suggest_restream_source_returns_manual_go2rtc_plan() -> None:
     }
     assert result["test_action"] == {
         "service": "test_restream_source",
-        "action": "ha_tv_pip.test_restream_source",
+        "action": "ha_tv_pip_plus.test_restream_source",
         "target": {ATTR_DEVICE_ID: "device-1"},
         "data": {
             ATTR_CAMERA_ENTITY: "camera.front_door_bell_main",
@@ -2106,7 +2106,7 @@ def test_suggest_restream_source_returns_manual_go2rtc_plan() -> None:
     }
     assert result["fallback_test_action"] == {
         "service": "test_restream_source",
-        "action": "ha_tv_pip.test_restream_source",
+        "action": "ha_tv_pip_plus.test_restream_source",
         "target": {ATTR_DEVICE_ID: "device-1"},
         "data": {
             ATTR_CAMERA_ENTITY: "camera.front_door_bell_main",
@@ -2163,7 +2163,7 @@ def test_suggest_restream_source_returns_manual_go2rtc_plan() -> None:
 
 
 def test_suggest_restream_source_uses_custom_base_url() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -2202,7 +2202,7 @@ def test_suggest_restream_source_uses_custom_base_url() -> None:
 
 
 def test_suggest_restream_source_returns_manual_frigate_plan() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -2257,7 +2257,7 @@ def test_suggest_restream_source_returns_manual_frigate_plan() -> None:
 
 
 def test_suggest_restream_source_falls_back_to_manual_provider() -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     entry = FakeEntry(
         entry_id="entry-1",
@@ -2301,7 +2301,7 @@ def test_suggest_restream_source_falls_back_to_manual_provider() -> None:
 def test_test_restream_source_returns_save_action_for_supported_hls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     monkeypatch.setattr(
         services,
@@ -2357,7 +2357,7 @@ def test_test_restream_source_returns_save_action_for_supported_hls(
         "next_step": "save_restream_source",
         "save_action": {
             "service": "save_restream_source",
-            "action": "ha_tv_pip.save_restream_source",
+            "action": "ha_tv_pip_plus.save_restream_source",
             "target": {ATTR_DEVICE_ID: "device-1"},
             "data": {
                 ATTR_CAMERA_ENTITY: "camera.front_door",
@@ -2375,7 +2375,7 @@ def test_test_restream_source_returns_save_action_for_supported_hls(
 def test_test_restream_source_can_save_supported_hls_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     monkeypatch.setattr(
         services,
@@ -2426,7 +2426,7 @@ def test_test_restream_source_can_save_supported_hls_defaults(
     assert result["saved_defaults"] == expected_defaults
     assert result["next_action"] == {
         "service": "show_camera",
-        "action": "ha_tv_pip.show_camera",
+        "action": "ha_tv_pip_plus.show_camera",
         "target": {ATTR_DEVICE_ID: "device-1"},
         "data": {ATTR_CAMERA_ENTITY: "camera.front_door"},
     }
@@ -2438,7 +2438,7 @@ def test_test_restream_source_can_save_supported_hls_defaults(
 def test_setup_camera_can_validate_and_save_restream_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     monkeypatch.setattr(
         services,
@@ -2508,7 +2508,7 @@ def test_setup_camera_can_validate_and_save_restream_source(
             "status": "complete",
             "action": {
                 "service": "save_restream_source",
-                "action": "ha_tv_pip.save_restream_source",
+                "action": "ha_tv_pip_plus.save_restream_source",
                 "target": {ATTR_DEVICE_ID: "device-1"},
                 "data": {
                     ATTR_CAMERA_ENTITY: "camera.front_door",
@@ -2528,7 +2528,7 @@ def test_setup_camera_can_validate_and_save_restream_source(
             "status": "ready",
             "action": {
                 "service": "show_camera",
-                "action": "ha_tv_pip.show_camera",
+                "action": "ha_tv_pip_plus.show_camera",
                 "target": {ATTR_DEVICE_ID: "device-1"},
                 "data": {ATTR_CAMERA_ENTITY: "camera.front_door"},
             },
@@ -2547,7 +2547,7 @@ def test_setup_camera_can_validate_and_save_restream_source(
 def test_setup_camera_without_restream_url_runs_calibration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     async def fake_calibrate_camera(hass: Any, call: Any) -> dict[str, Any]:
         return {
@@ -2607,7 +2607,7 @@ def test_setup_camera_without_restream_url_runs_calibration(
 def test_test_restream_source_warns_when_receiver_lacks_stream_support(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     monkeypatch.setattr(
         services,
@@ -2658,7 +2658,7 @@ def test_test_restream_source_warns_when_receiver_lacks_stream_support(
 def test_test_restream_source_does_not_recommend_provider_base_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     monkeypatch.setattr(
         services,
@@ -2707,7 +2707,7 @@ def test_test_restream_source_does_not_recommend_provider_base_url(
 def test_camera_stream_test_stores_non_sensitive_compatibility_report(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -2780,7 +2780,7 @@ def test_camera_stream_test_stores_non_sensitive_compatibility_report(
     ]
     assert "http" not in str(result)
     assert (
-        hass.data["ha_tv_pip"]["camera_compatibility"]["entry-1"]["camera.front_door"]
+        hass.data["ha_tv_pip_plus"]["camera_compatibility"]["entry-1"]["camera.front_door"]
         == result
     )
 
@@ -2788,7 +2788,7 @@ def test_camera_stream_test_stores_non_sensitive_compatibility_report(
 def test_camera_stream_test_recommends_auto_with_playable_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -2854,7 +2854,7 @@ def test_camera_stream_test_recommends_auto_with_playable_fallback(
 def test_camera_stream_test_can_use_restream_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -2944,7 +2944,7 @@ def test_camera_stream_test_can_use_restream_url(
 def test_camera_stream_test_can_save_recommendation_as_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -3035,7 +3035,7 @@ def test_camera_stream_test_can_save_recommendation_as_defaults(
 def test_calibrate_camera_can_save_recommendation_with_summary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -3116,7 +3116,7 @@ def test_calibrate_camera_can_save_recommendation_with_summary(
         "service": "show_camera",
         "data": {ATTR_CAMERA_ENTITY: "camera.front_door"},
         "service_call": {
-            "action": "ha_tv_pip.show_camera",
+            "action": "ha_tv_pip_plus.show_camera",
             "target": {ATTR_DEVICE_ID: "device-1"},
             "data": {ATTR_CAMERA_ENTITY: "camera.front_door"},
         },
@@ -3151,7 +3151,7 @@ def test_calibrate_camera_can_save_recommendation_with_summary(
 def test_camera_stream_test_recommends_restreaming_for_snapshot_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -3229,7 +3229,7 @@ def test_camera_stream_test_recommends_restreaming_for_snapshot_only(
     ]
     assert result["restream_source_suggestion"]["save_action"] == {
         "service": "save_restream_source",
-        "action": "ha_tv_pip.save_restream_source",
+        "action": "ha_tv_pip_plus.save_restream_source",
         "target": {ATTR_DEVICE_ID: "device-1"},
         "data": {
             ATTR_CAMERA_ENTITY: "camera.front_door",
@@ -3250,7 +3250,7 @@ def test_camera_stream_test_recommends_restreaming_for_snapshot_only(
             ATTR_STREAM_TYPE: "snapshot",
         },
         "service_call": {
-            "action": "ha_tv_pip.set_camera_defaults",
+            "action": "ha_tv_pip_plus.set_camera_defaults",
             "target": {ATTR_DEVICE_ID: "device-1"},
             "data": {
                 ATTR_CAMERA_ENTITY: "camera.front_door",
@@ -3273,7 +3273,7 @@ def test_camera_stream_test_recommends_restreaming_for_snapshot_only(
 def test_calibrate_camera_flags_restreaming_when_no_paths_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -3359,7 +3359,7 @@ def test_calibrate_camera_flags_restreaming_when_no_paths_work(
         "service": "calibrate_camera",
         "data": {ATTR_CAMERA_ENTITY: "camera.front_door"},
         "service_call": {
-            "action": "ha_tv_pip.calibrate_camera",
+            "action": "ha_tv_pip_plus.calibrate_camera",
             "target": {ATTR_DEVICE_ID: "device-1"},
             "data": {ATTR_CAMERA_ENTITY: "camera.front_door"},
         },
@@ -3393,7 +3393,7 @@ def test_calibrate_camera_flags_restreaming_when_no_paths_work(
 def test_show_camera_service_stores_last_camera_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -3468,7 +3468,7 @@ def test_show_camera_service_stores_last_camera_result(
         )
     )
 
-    result = hass.data["ha_tv_pip"]["camera_last_result"]["entry-1"]
+    result = hass.data["ha_tv_pip_plus"]["camera_last_result"]["entry-1"]
     updated_at = result.pop("updated_at")
 
     assert result == {
@@ -3492,7 +3492,7 @@ def test_show_camera_service_stores_last_camera_result(
         "has_notification_text": False,
     }
     assert "T" in updated_at
-    assert hass.data["ha_tv_pip"]["last_command_result"]["entry-1"][
+    assert hass.data["ha_tv_pip_plus"]["last_command_result"]["entry-1"][
         "command_type"
     ] == "show_camera"
     assert "http" not in str(result)
@@ -3501,7 +3501,7 @@ def test_show_camera_service_stores_last_camera_result(
 def test_show_camera_service_stores_last_camera_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -3568,7 +3568,7 @@ def test_show_camera_service_stores_last_camera_failure(
             )
         )
 
-    result = hass.data["ha_tv_pip"]["camera_last_result"]["entry-1"]
+    result = hass.data["ha_tv_pip_plus"]["camera_last_result"]["entry-1"]
 
     assert result["command_type"] == "show_camera"
     assert result["status"] == "failed"
@@ -3578,7 +3578,7 @@ def test_show_camera_service_stores_last_camera_failure(
     assert result["final_stream_type"] == "hls"
     assert result["updated_at"]
     assert (
-        hass.data["ha_tv_pip"]["last_command_result"]["entry-1"]["status"]
+        hass.data["ha_tv_pip_plus"]["last_command_result"]["entry-1"]["status"]
         == "failed"
     )
     assert "http" not in str(result)
@@ -3587,7 +3587,7 @@ def test_show_camera_service_stores_last_camera_failure(
 def test_show_snapshot_service_rejects_receiver_without_snapshot_capability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -3632,7 +3632,7 @@ def test_show_snapshot_service_rejects_receiver_without_snapshot_capability(
 def test_show_notification_service_rejects_receiver_without_notification_capability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     class FakeRemoteRegistry:
         def is_connected(self, device_id: str) -> bool:
@@ -3674,7 +3674,7 @@ def test_show_notification_service_rejects_receiver_without_notification_capabil
 def test_show_camera_service_strips_media_text_when_receiver_lacks_capability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
     sent: dict[str, Any] = {}
 
     class FakeRemoteRegistry:
@@ -3903,7 +3903,7 @@ def test_show_camera_command_auto_prefers_mjpeg_without_playable_fallback(
 def test_show_camera_command_mjpeg_first_falls_back_to_hls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     camera_module = FakeCameraModule("/api/hls/front-door")
     monkeypatch.setitem(sys.modules, "homeassistant.components.camera", camera_module)
@@ -4003,7 +4003,7 @@ def test_show_camera_command_auto_falls_back_to_mjpeg(
 def test_show_camera_command_auto_falls_back_to_snapshot_when_mjpeg_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from custom_components.ha_tv_pip import services
+    from custom_components.ha_tv_pip_plus import services
 
     monkeypatch.setitem(
         sys.modules,

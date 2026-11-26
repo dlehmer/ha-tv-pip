@@ -11,11 +11,11 @@ if (!version || typeof version !== "string") {
 }
 
 const expectedAssets = {
-  debugApk: `ha-tv-pip-android-debug-v${version}.apk`,
-  releaseApk: `ha-tv-pip-android-release-v${version}.apk`,
-  releaseBundle: `ha-tv-pip-android-release-v${version}.aab`,
-  manualIntegrationZip: `ha-tv-pip-integration-v${version}.zip`,
-  hacsIntegrationZip: "ha-tv-pip-integration.zip"
+  debugApk: `ha-tv-pip-plus-android-debug-v${version}.apk`,
+  releaseApk: `ha-tv-pip-plus-android-release-v${version}.apk`,
+  releaseBundle: `ha-tv-pip-plus-android-release-v${version}.aab`,
+  manualIntegrationZip: `ha-tv-pip-plus-integration-v${version}.zip`,
+  hacsIntegrationZip: "ha-tv-pip-plus-integration.zip"
 };
 
 const failures = [];
@@ -127,14 +127,14 @@ function checkManualIntegrationZip(name) {
   }
 
   const entries = zipEntries(path);
-  const manifestPath = "custom_components/ha_tv_pip/manifest.json";
+  const manifestPath = "custom_components/ha_tv_pip_plus/manifest.json";
 
   expectEntry(entries, manifestPath, name);
-  expectEntry(entries, "custom_components/ha_tv_pip/config_flow.py", name);
-  expectEntry(entries, "custom_components/ha_tv_pip/README.md", name);
-  expectEntry(entries, "custom_components/ha_tv_pip/icon.png", name);
-  expectEntry(entries, "custom_components/ha_tv_pip/logo.png", name);
-  expectBrandEntries(entries, "custom_components/ha_tv_pip/", name);
+  expectEntry(entries, "custom_components/ha_tv_pip_plus/config_flow.py", name);
+  expectEntry(entries, "custom_components/ha_tv_pip_plus/README.md", name);
+  expectEntry(entries, "custom_components/ha_tv_pip_plus/icon.png", name);
+  expectEntry(entries, "custom_components/ha_tv_pip_plus/logo.png", name);
+  expectBrandEntries(entries, "custom_components/ha_tv_pip_plus/", name);
   expectNoEntry(
     entries,
     (entry) => entry === "manifest.json",

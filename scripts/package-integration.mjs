@@ -11,10 +11,10 @@ if (!version || typeof version !== "string") {
   throw new Error("Root package.json must contain a version string");
 }
 
-const sourceDir = resolve("custom_components/ha_tv_pip");
+const sourceDir = resolve("custom_components/ha_tv_pip_plus");
 const distDir = resolve("dist");
-const outputPath = join(distDir, `ha-tv-pip-integration-v${version}.zip`);
-const hacsOutputPath = join(distDir, "ha-tv-pip-integration.zip");
+const outputPath = join(distDir, `ha-tv-pip-plus-integration-v${version}.zip`);
+const hacsOutputPath = join(distDir, "ha-tv-pip-plus-integration.zip");
 
 if (!existsSync(sourceDir)) {
   throw new Error(`Integration source directory does not exist: ${sourceDir}`);
@@ -24,9 +24,9 @@ mkdirSync(distDir, { recursive: true });
 rmSync(outputPath, { force: true });
 rmSync(hacsOutputPath, { force: true });
 
-const tempRoot = await mkdtemp(join(tmpdir(), "ha-tv-pip-integration-"));
+const tempRoot = await mkdtemp(join(tmpdir(), "ha-tv-pip-plus-integration-"));
 const manualRoot = join(tempRoot, "manual");
-const manualTargetDir = join(manualRoot, "custom_components/ha_tv_pip");
+const manualTargetDir = join(manualRoot, "custom_components/ha_tv_pip_plus");
 const hacsRoot = join(tempRoot, "hacs");
 
 try {
@@ -43,7 +43,7 @@ try {
   mkdirSync(hacsRoot, { recursive: true });
   cpSync(sourceDir, hacsRoot, copyOptions);
 
-  const zip = spawnSync("zip", ["-r", outputPath, "custom_components/ha_tv_pip"], {
+  const zip = spawnSync("zip", ["-r", outputPath, "custom_components/ha_tv_pip_plus"], {
     cwd: manualRoot,
     stdio: "inherit"
   });

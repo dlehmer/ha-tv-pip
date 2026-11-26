@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">HA TV PiP Receiver</string>
-    <string name="main_title">HA TV PiP Receiver</string>
+    <string name="app_name">HA TV PiP Plus Receiver</string>
+    <string name="main_title">HA TV PiP Plus Receiver</string>
     <string name="main_status_summary">Récepteur %1$s | Accès distant %2$s | Lanceur %3$s</string>
     <string name="section_pip_controls">Commandes PiP</string>
     <string name="section_remote_receiver">Récepteur distant</string>
@@ -56,7 +56,7 @@
     <string name="status_saved">Enregistré</string>
     <string name="remote_setup_saved">Configuration distante enregistrée</string>
     <string name="remote_use_ha_to_sync">Utiliser HA pour synchroniser</string>
-    <string name="remote_receiver_help">Home Assistant peut configurer cela pour vous. La configuration manuelle reste disponible pour le dépannage avancé. Le mode distant se connecte en sortie à votre propre instance Home Assistant ; ce n’est pas un service cloud HA TV PiP.</string>
+    <string name="remote_receiver_help">Home Assistant peut configurer cela pour vous. La configuration manuelle reste disponible pour le dépannage avancé. Le mode distant se connecte en sortie à votre propre instance Home Assistant ; ce n’est pas un service cloud HA TV PiP Plus.</string>
     <string name="remote_details_saved">Les détails du récepteur distant sont enregistrés</string>
     <string name="remote_details_not_configured">Les détails du récepteur distant ne sont pas configurés</string>
     <string name="remote_details_saved_description">Ce téléviseur peut se connecter en sortie à Home Assistant pour les commandes PiP externes.</string>
@@ -72,7 +72,7 @@
     <string name="state_value">État : %1$s</string>
     <string name="last_error_value">Dernière erreur : %1$s</string>
     <string name="launcher_icon_value">Icône du lanceur : %1$s</string>
-    <string name="launcher_help">Si elle est masquée, Home Assistant peut rouvrir cet écran avec le bouton Ouvrir le lanceur. Vous pouvez aussi récupérer l’accès via Paramètres Android &gt; Applications &gt; HA TV PiP.</string>
+    <string name="launcher_help">Si elle est masquée, Home Assistant peut rouvrir cet écran avec le bouton Ouvrir le lanceur. Vous pouvez aussi récupérer l’accès via Paramètres Android &gt; Applications &gt; HA TV PiP Plus.</string>
     <string name="launcher_pair_before_hiding">Associez ce récepteur avant de masquer l’icône du lanceur.</string>
     <string name="pairing_code_value">Code d’association : %1$s</string>
     <string name="waiting_for_value">En attente de : %1$s</string>
@@ -101,7 +101,7 @@
     <string name="action_try_pip">Essayer le PiP</string>
     <string name="test_video_title">Vidéo de test</string>
     <string name="pip_subtitle_camera_preview">Aperçu caméra maison connectée</string>
-    <string name="notification_title">HA TV PiP Receiver</string>
+    <string name="notification_title">HA TV PiP Plus Receiver</string>
     <string name="notification_local_control_running">Point de commande local actif sur le port %1$d</string>
     <string name="notification_channel_local_control">Commande locale</string>
     <string name="compatibility_supported">Pris en charge</string>
@@ -140,7 +140,7 @@
     <string name="setup_step_remote">3. Utilisez Home Assistant pour synchroniser les paramètres du récepteur distant lorsque cette TV doit recevoir des commandes PiP externes.</string>
     <string name="troubleshooting_discovery">Découverte : gardez la TV et Home Assistant sur le même réseau et vérifiez que le point de terminaison local fonctionne.</string>
     <string name="troubleshooting_remote">Récepteur distant : vérifiez que Home Assistant a enregistré l’URL externe et le jeton, puis utilisez Synchroniser la configuration distante.</string>
-    <string name="troubleshooting_launcher">Lanceur masqué : utilisez Ouvrir le lanceur dans Home Assistant ou Paramètres Android &gt; Applications &gt; HA TV PiP pour rouvrir cet écran.</string>
+    <string name="troubleshooting_launcher">Lanceur masqué : utilisez Ouvrir le lanceur dans Home Assistant ou Paramètres Android &gt; Applications &gt; HA TV PiP Plus pour rouvrir cet écran.</string>
     <string name="overlay_action_confirm">Appuyez à nouveau pour confirmer</string>
     <string name="overlay_action_working">En cours…</string>
     <string name="overlay_action_done">✓ Terminé</string>

@@ -3,7 +3,7 @@ from pathlib import Path
 SERVICES_YAML = (
     Path(__file__).parents[2]
     / "custom_components"
-    / "ha_tv_pip"
+    / "ha_tv_pip_plus"
     / "services.yaml"
 )
 
@@ -186,14 +186,14 @@ def test_device_and_entity_selectors_do_not_need_examples() -> None:
             assert metadata[service][field] is None
 
 
-def test_services_target_only_ha_tv_pip_devices() -> None:
+def test_services_target_only_ha_tv_pip_plus_devices() -> None:
     content = SERVICES_YAML.read_text(encoding="utf-8")
 
     for service in SERVICE_EXAMPLES:
         service_block = _service_block(content, service)
         assert "  target:\n" in service_block
         assert "    device:\n" in service_block
-        assert "      integration: ha_tv_pip\n" in service_block
+        assert "      integration: ha_tv_pip_plus\n" in service_block
         assert "receiver_device_id:" not in service_block
 
 

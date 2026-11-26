@@ -41,8 +41,8 @@ def test_integration_release_archives_have_expected_install_layout(
     assert result.returncode == 0, result.stderr or result.stdout
 
     version = json.loads((package_root / "package.json").read_text())["version"]
-    manual_zip = package_root / "dist" / f"ha-tv-pip-integration-v{version}.zip"
-    hacs_zip = package_root / "dist" / "ha-tv-pip-integration.zip"
+    manual_zip = package_root / "dist" / f"ha-tv-pip-plus-integration-v{version}.zip"
+    hacs_zip = package_root / "dist" / "ha-tv-pip-plus-integration.zip"
 
     assert manual_zip.exists()
     assert hacs_zip.exists()
@@ -50,11 +50,11 @@ def test_integration_release_archives_have_expected_install_layout(
     manual_names = _zip_names(manual_zip)
     hacs_names = _zip_names(hacs_zip)
 
-    assert "custom_components/ha_tv_pip/manifest.json" in manual_names
-    assert "custom_components/ha_tv_pip/config_flow.py" in manual_names
+    assert "custom_components/ha_tv_pip_plus/manifest.json" in manual_names
+    assert "custom_components/ha_tv_pip_plus/config_flow.py" in manual_names
     assert "manifest.json" not in manual_names
     assert not any(
-        name.startswith("custom_components/ha_tv_pip/custom_components/")
+        name.startswith("custom_components/ha_tv_pip_plus/custom_components/")
         for name in manual_names
     )
 

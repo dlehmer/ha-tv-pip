@@ -1,6 +1,6 @@
 # Home Assistant Automation Examples ⚙️
 
-Automation examples use the Stage 7 `ha_tv_pip.show_camera` stream type options, the Stage 6 `ha_tv_pip.show_snapshot` service, and the Stage 11 `ha_tv_pip.show_notification` service.
+Automation examples use the Stage 7 `ha_tv_pip_plus.show_camera` stream type options, the Stage 6 `ha_tv_pip_plus.show_snapshot` service, and the Stage 11 `ha_tv_pip_plus.show_notification` service.
 
 Replace the target `device_id`, `camera_entity`, and trigger entity ids with values from your Home Assistant instance. The target device picker is limited to HA TV PiP receiver devices. Use a compatible H.264/HLS camera stream where possible; lower-resolution secondary streams are often more reliable on Android TV devices than high-resolution main streams.
 
@@ -13,7 +13,7 @@ trigger:
     entity_id: binary_sensor.front_door_bell_visitor
     to: "on"
 action:
-  - service: ha_tv_pip.show_camera
+  - service: ha_tv_pip_plus.show_camera
     target:
       device_id: living_room_tv
     data:
@@ -43,7 +43,7 @@ trigger:
     entity_id: binary_sensor.front_door_motion
     to: "on"
 action:
-  - service: ha_tv_pip.show_snapshot
+  - service: ha_tv_pip_plus.show_snapshot
     target:
       device_id: living_room_tv
     data:
@@ -67,7 +67,7 @@ trigger:
     entity_id: binary_sensor.front_door_bell_visitor
     to: "on"
 action:
-  - service: ha_tv_pip.show_notification
+  - service: ha_tv_pip_plus.show_notification
     target:
       device_id: living_room_tv
     data:
@@ -95,7 +95,7 @@ trigger:
     entity_id: binary_sensor.driveway_motion
     to: "on"
 action:
-  - service: ha_tv_pip.show_camera
+  - service: ha_tv_pip_plus.show_camera
     target:
       device_id: living_room_tv
     data:

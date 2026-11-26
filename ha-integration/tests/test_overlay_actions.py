@@ -1,7 +1,10 @@
 """Tests for one-time overlay action buttons."""
 
-from custom_components.ha_tv_pip.actions import PendingActionStore
-from custom_components.ha_tv_pip.client import ShowCameraCommand, show_camera_payload
+from custom_components.ha_tv_pip_plus.actions import PendingActionStore
+from custom_components.ha_tv_pip_plus.client import (
+    ShowCameraCommand,
+    show_camera_payload,
+)
 
 UNLOCK = {
     "label": "Unlock Front Door",
@@ -66,11 +69,11 @@ def test_payload_includes_actions_only_with_callback() -> None:
     with_actions = replace(
         base,
         actions=({"id": "abc", "label": "Unlock", "confirm": True},),
-        action_callback_url="http://ha.local:8123/api/ha_tv_pip/action",
+        action_callback_url="http://ha.local:8123/api/ha_tv_pip_plus/action",
     )
     payload = show_camera_payload(with_actions)
     assert payload["actions"] == [{"id": "abc", "label": "Unlock", "confirm": True}]
-    assert payload["actionCallbackUrl"] == "http://ha.local:8123/api/ha_tv_pip/action"
+    assert payload["actionCallbackUrl"] == "http://ha.local:8123/api/ha_tv_pip_plus/action"
 
 
 class _State:
@@ -90,15 +93,15 @@ class _States:
 
 class _Hass:
     def __init__(self, pairings: dict, states: dict[str, _State]) -> None:
-        from custom_components.ha_tv_pip.actions import DATA_CAMERA_BUTTONS
-        from custom_components.ha_tv_pip.const import DOMAIN
+        from custom_components.ha_tv_pip_plus.actions import DATA_CAMERA_BUTTONS
+        from custom_components.ha_tv_pip_plus.const import DOMAIN
 
         self.data = {DOMAIN: {DATA_CAMERA_BUTTONS: pairings}}
         self.states = _States(states)
 
 
 def test_paired_lock_becomes_unlock_button() -> None:
-    from custom_components.ha_tv_pip.actions import default_action_spec
+    from custom_components.ha_tv_pip_plus.actions import default_action_spec
 
     hass = _Hass(
         {"camera.front": {"entity_id": "lock.front_door"}},
@@ -115,7 +118,7 @@ def test_paired_lock_becomes_unlock_button() -> None:
 
 
 def test_paired_garage_and_script_with_custom_label() -> None:
-    from custom_components.ha_tv_pip.actions import default_action_spec
+    from custom_components.ha_tv_pip_plus.actions import default_action_spec
 
     hass = _Hass(
         {
@@ -138,7 +141,7 @@ def test_paired_garage_and_script_with_custom_label() -> None:
 
 
 def test_normalize_drops_bad_pairings() -> None:
-    from custom_components.ha_tv_pip.actions import normalize_camera_buttons
+    from custom_components.ha_tv_pip_plus.actions import normalize_camera_buttons
 
     pairings = normalize_camera_buttons(
         {
@@ -151,7 +154,7 @@ def test_normalize_drops_bad_pairings() -> None:
 
 
 def test_settings_form_round_trip() -> None:
-    from custom_components.ha_tv_pip.config_flow import (
+    from custom_components.ha_tv_pip_plus.config_flow import (
         camera_buttons_from_form,
         camera_buttons_to_form,
     )

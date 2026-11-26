@@ -39,6 +39,18 @@ object ReceiverStatusPayload {
                     .put("pairedClientName", pairing.pairedClientName)
             )
             .put("apiVersion", 1)
+            .put("packageName", context.packageName)
+            .put(
+                "overlayPermission",
+                if (
+                    android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M ||
+                    android.provider.Settings.canDrawOverlays(context)
+                ) {
+                    "granted"
+                } else {
+                    "not_granted"
+                }
+            )
             .put("capabilities", ReceiverCapabilities.toJson())
             .put("controlPort", port)
             .put("controlRunning", control.running)

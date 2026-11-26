@@ -6,7 +6,7 @@ export const ROOT_LOCK_PATH = "package-lock.json";
 export const ANDROID_PACKAGE_PATH = "android-tv-app/package.json";
 export const ANDROID_BUILD_PATH = "android-tv-app/app/build.gradle.kts";
 export const HA_PACKAGE_PATH = "ha-integration/package.json";
-export const HA_MANIFEST_PATH = "custom_components/ha_tv_pip/manifest.json";
+export const HA_MANIFEST_PATH = "custom_components/ha_tv_pip_plus/manifest.json";
 export const WEBSITE_PACKAGE_PATH = "website/package.json";
 export const WEBSITE_LOCK_PATH = "website/package-lock.json";
 
@@ -18,7 +18,7 @@ const VERSION_FILE_PATTERNS = [
   /^website\/package\.json$/,
   /^website\/package-lock\.json$/,
   /^android-tv-app\/.*build\.gradle(?:\.kts)?$/,
-  /^custom_components\/ha_tv_pip\/manifest\.json$/
+  /^custom_components\/ha_tv_pip_plus\/manifest\.json$/
 ];
 
 const PATCH_PATH_PATTERNS = [
@@ -26,7 +26,7 @@ const PATCH_PATH_PATTERNS = [
   /^android-tv-app\/src\//,
   /^android-tv-app\/build\.gradle\.kts$/,
   /^android-tv-app\/settings\.gradle\.kts$/,
-  /^custom_components\/ha_tv_pip\//
+  /^custom_components\/ha_tv_pip_plus\//
 ];
 
 const MINOR_RUNTIME_CHANGE_LINE_THRESHOLD = 250;
@@ -42,7 +42,7 @@ const RUNTIME_AREAS = [
   {
     name: "Home Assistant integration",
     patterns: [
-      /^custom_components\/ha_tv_pip\//
+      /^custom_components\/ha_tv_pip_plus\//
     ]
   }
 ];

@@ -469,7 +469,7 @@ class LocalControlServer(
     }
 
     companion object {
-        const val DEFAULT_PORT = 8765
+        const val DEFAULT_PORT = 8767
         private const val ACCEPT_TIMEOUT_MS = 500
         private const val PAIRING_CODE_TTL_SECONDS = 300
         private val KNOWN_ENDPOINTS = setOf(

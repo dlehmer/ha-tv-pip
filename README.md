@@ -1,12 +1,20 @@
-# HA TV PiP 📺🪟
+# HA TV PiP Plus 📺🪟🔓
 
-![GitHub package.json version](https://img.shields.io/github/package-json/v/manix84/ha-tv-pip) ![GitHub License](https://img.shields.io/github/license/manix84/ha-tv-pip)
+![GitHub package.json version](https://img.shields.io/github/package-json/v/dlehmer/ha-tv-pip) ![GitHub License](https://img.shields.io/github/license/dlehmer/ha-tv-pip) [![Release 📦](https://github.com/dlehmer/ha-tv-pip/actions/workflows/release.yml/badge.svg)](https://github.com/dlehmer/ha-tv-pip/actions/workflows/release.yml)
 
-[![Release 📦](https://github.com/manix84/ha-tv-pip/actions/workflows/release.yml/badge.svg)](https://github.com/manix84/ha-tv-pip/actions/workflows/release.yml) [![Website Deploy 🌍](https://github.com/manix84/ha-tv-pip/actions/workflows/website.yml/badge.svg)](https://github.com/manix84/ha-tv-pip/actions/workflows/website.yml)
+HA TV PiP Plus shows short-lived camera feeds from Home Assistant on Android TV and Google TV, as a small popup over whatever you're watching, with an optional **door button** (unlock the front door, open the garage) you press with the TV remote.
 
-[![Android TV App Quality 📺](https://github.com/manix84/ha-tv-pip/actions/workflows/quality-android-tv-app.yml/badge.svg)](https://github.com/manix84/ha-tv-pip/actions/workflows/quality-android-tv-app.yml) [![Home Assistant Integration Quality 🏠](https://github.com/manix84/ha-tv-pip/actions/workflows/quality-ha-integration.yml/badge.svg)](https://github.com/manix84/ha-tv-pip/actions/workflows/quality-ha-integration.yml) [![Website Quality 🌐](https://github.com/manix84/ha-tv-pip/actions/workflows/quality-website.yml/badge.svg)](https://github.com/manix84/ha-tv-pip/actions/workflows/quality-website.yml)
+It is a fork of [HA TV PiP](https://github.com/manix84/ha-tv-pip) by [manix84](https://github.com/manix84), used under the MIT License. HA TV PiP Plus uses its own app ID (`com.dlehmer.hatvpipplus`), integration (`ha_tv_pip_plus`) and control port (8767), so it can be installed alongside the original.
 
-HA TV PiP is a local-first Home Assistant companion project for showing short-lived camera feeds on Android TV and Google TV devices using Android Picture-in-Picture or a local overlay fallback.
+## Quick Start 🚀
+
+1. **Install the integration** in Home Assistant: in HACS, add `https://github.com/dlehmer/ha-tv-pip` as a custom repository (type Integration), install **HA TV PiP Plus**, and restart Home Assistant.
+2. **Prepare each TV** (one time): Settings → System → About → click the build number 7 times, then Settings → System → Developer options → turn on **USB debugging**.
+3. **Add the TV**: Settings → Devices & services → Add integration → **HA TV PiP Plus**. Enter the TV's IP address and tick **Install the HA TV PiP Plus app on this TV first**. Accept the "Allow debugging?" prompt on the TV. Home Assistant installs the app, allows it to show popups over other apps, and pairs with it; type the code the TV shows.
+4. **Pair cameras with doors** (optional): on any TV's **Configure** page, tick **Set up door buttons for cameras**.
+5. **Use it** in automations with the `ha_tv_pip_plus.show_camera` action.
+
+You can turn USB debugging off afterwards; it's only needed again for **Install or update TV app** and **Grant overlay permission** on the TV's device page.
 
 ## See It In Action 📸
 
@@ -30,7 +38,7 @@ Automations can also pass their own `actions` (or `actions: []` for none). See
 [Door Buttons in the integration README](custom_components/ha_tv_pip/README.md#door-buttons-)
 for the full setup and a YAML example.
 
-## Install HA TV PiP 🚀
+## Installing the Original Way 🧰
 
 HA TV PiP needs two installed parts:
 
@@ -82,17 +90,17 @@ Post-1.0 compatibility polish is active. Current work focuses on camera stream c
 The latest receiver/integration flow includes:
 
 - Receiver-level Home Assistant defaults for preferred stream strategy, duration, popup position, snapshot fallback, width, and height.
-- Guided camera setup through `ha_tv_pip.setup_camera`, which calibrates normal camera paths or validates and saves a manual restream URL.
-- Per-camera defaults through `ha_tv_pip.calibrate_camera`, `ha_tv_pip.test_camera_stream`, `ha_tv_pip.set_camera_defaults`, and `ha_tv_pip.clear_camera_defaults`.
+- Guided camera setup through `ha_tv_pip_plus.setup_camera`, which calibrates normal camera paths or validates and saves a manual restream URL.
+- Per-camera defaults through `ha_tv_pip_plus.calibrate_camera`, `ha_tv_pip_plus.test_camera_stream`, `ha_tv_pip_plus.set_camera_defaults`, and `ha_tv_pip_plus.clear_camera_defaults`.
 - Compatibility tests that check HLS, MJPEG, and snapshot availability for a camera/receiver pair.
 - `recommended_defaults` previews so users can inspect exactly what would be saved before applying defaults.
 - Optional `restream_url` and `restream_provider` per-camera defaults for users who already expose a TV-safe go2rtc or similar HLS/MJPEG stream.
-- `ha_tv_pip.save_restream_source` for saving a tested go2rtc, Frigate, or similar restream URL as the camera's TV-safe live source, with a redacted `defaults_summary` confirmation.
+- `ha_tv_pip_plus.save_restream_source` for saving a tested go2rtc, Frigate, or similar restream URL as the camera's TV-safe live source, with a redacted `defaults_summary` confirmation.
 - Saved Camera Defaults receiver sensor so saved per-camera defaults and restream source state are visible without exposing stream URLs.
-- `ha_tv_pip.clear_all_camera_defaults` for resetting saved compatibility choices on a receiver before recalibrating.
-- `ha_tv_pip.suggest_restream_source` for ordered manual restream setup steps, candidate go2rtc/Frigate-style HLS/MJPEG URL patterns, validation payloads, fallback MJPEG test payloads, and save-action payloads.
+- `ha_tv_pip_plus.clear_all_camera_defaults` for resetting saved compatibility choices on a receiver before recalibrating.
+- `ha_tv_pip_plus.suggest_restream_source` for ordered manual restream setup steps, candidate go2rtc/Frigate-style HLS/MJPEG URL patterns, validation payloads, fallback MJPEG test payloads, and save-action payloads.
 - Optional restream base URL support for generating candidate URLs against a real go2rtc or Frigate host.
-- `ha_tv_pip.test_restream_source` for validating candidate restream URLs before saving them as per-camera defaults.
+- `ha_tv_pip_plus.test_restream_source` for validating candidate restream URLs before saving them as per-camera defaults.
 - Copyable Home Assistant `action` payloads for validation, save, and follow-up `show_camera` steps.
 - Automatic `restream_source_suggestion` guidance in compatibility and calibration results when restreaming is recommended.
 - `restreaming_recommended`, `restreaming_reason`, `restreaming_next_step`, and `restreaming_options` fields when a camera likely needs a TV-safe restreamed source.
@@ -117,11 +125,11 @@ Stage 3 is complete in `0.14.1`. The Android TV app advertises the receiver on t
 
 Stage 4 is complete in `0.18.0`. Discovered receivers use a TV-visible pairing code and bearer-token authentication, so unpaired LAN clients cannot trigger `/show` or `/close`.
 
-Stage 5 is complete in `0.21.0`. Home Assistant automations can call `ha_tv_pip.show_camera` for paired receivers, with Android TV overlay playback verified using a compatible camera stream. Some high-resolution or non-H.264 camera streams may still need future stream selection or transcoding support when their codec/profile is not Android TV-compatible.
+Stage 5 is complete in `0.21.0`. Home Assistant automations can call `ha_tv_pip_plus.show_camera` for paired receivers, with Android TV overlay playback verified using a compatible camera stream. Some high-resolution or non-H.264 camera streams may still need future stream selection or transcoding support when their codec/profile is not Android TV-compatible.
 
-Stage 6 is complete in `0.23.0`. Home Assistant automations can call `ha_tv_pip.show_snapshot` to display fast camera snapshots on paired receivers using the same local auth and targeting path. Video stream commands can also send an optional entity-based snapshot preview while live playback loads.
+Stage 6 is complete in `0.23.0`. Home Assistant automations can call `ha_tv_pip_plus.show_snapshot` to display fast camera snapshots on paired receivers using the same local auth and targeting path. Video stream commands can also send an optional entity-based snapshot preview while live playback loads.
 
-Stage 7 is complete in `0.24.0`. `ha_tv_pip.show_camera` supports `stream_type: auto`, `stream_type: hls`, `stream_type: mjpeg`, `stream_type: mjpeg_first`, and `stream_type: snapshot`, with tested receiver-side snapshot fallback when an accepted video stream fails during playback. Current compatibility work adds optional `stream_camera_entity` support for cameras that expose a separate TV-friendly stream entity.
+Stage 7 is complete in `0.24.0`. `ha_tv_pip_plus.show_camera` supports `stream_type: auto`, `stream_type: hls`, `stream_type: mjpeg`, `stream_type: mjpeg_first`, and `stream_type: snapshot`, with tested receiver-side snapshot fallback when an accepted video stream fails during playback. Current compatibility work adds optional `stream_camera_entity` support for cameras that expose a separate TV-friendly stream entity.
 
 Stage 8 is complete in `0.26.0`. Each paired receiver now exposes Home Assistant status, connected, test, close, and launcher management entities, plus redacted config entry diagnostics for troubleshooting. Home Assistant can hide or restore the Android TV launcher icon and reopen the receiver UI without ADB.
 
@@ -249,7 +257,7 @@ Before reporting a bug or testing a new release:
 - Confirm the Android receiver app opens and reports the local endpoint as running.
 - Pair through the discovered Home Assistant receiver card where possible.
 - Use the receiver device's Test PiP button to verify basic control.
-- Run `ha_tv_pip.calibrate_camera` for camera-specific stream issues before changing automations.
+- Run `ha_tv_pip_plus.calibrate_camera` for camera-specific stream issues before changing automations.
 - Download Home Assistant config entry diagnostics when opening an issue.
 
 For common setup, pairing, camera, launcher, and remote receiver issues, see [Troubleshooting](docs/troubleshooting.md).
@@ -258,9 +266,9 @@ For common setup, pairing, camera, launcher, and remote receiver issues, see [Tr
 
 Available now:
 
-- Home Assistant service: `ha_tv_pip.show_camera` 📹
-- Home Assistant service: `ha_tv_pip.show_snapshot` 🖼️
-- Home Assistant service: `ha_tv_pip.show_notification` 🔔
+- Home Assistant service: `ha_tv_pip_plus.show_camera` 📹
+- Home Assistant service: `ha_tv_pip_plus.show_snapshot` 🖼️
+- Home Assistant service: `ha_tv_pip_plus.show_notification` 🔔
 - Home Assistant HLS stream resolution with snapshot fallback 🎬
 - Camera compatibility testing and per-camera stream defaults 🧭
 - Camera calibration action plans that suggest the next service call and safe payload 🧰

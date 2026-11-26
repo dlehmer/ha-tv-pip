@@ -184,9 +184,9 @@ class RemoteReceiverClient(
     }
 
     companion object {
-        const val EVENT_RECEIVER_COMMAND = "ha_tv_pip/receiver_command"
-        const val WS_TYPE_REGISTER = "ha_tv_pip/receiver/register"
-        const val WS_TYPE_STATUS_RESPONSE = "ha_tv_pip/receiver/status_response"
+        const val EVENT_RECEIVER_COMMAND = "ha_tv_pip_plus/receiver_command"
+        const val WS_TYPE_REGISTER = "ha_tv_pip_plus/receiver/register"
+        const val WS_TYPE_STATUS_RESPONSE = "ha_tv_pip_plus/receiver/status_response"
         private const val NORMAL_CLOSE_CODE = 1000
 
         fun homeAssistantWebSocketUrl(homeAssistantUrl: String): String {
