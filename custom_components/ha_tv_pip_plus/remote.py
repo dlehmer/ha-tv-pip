@@ -319,6 +319,26 @@ def _token_matches_config_entry(hass: Any, *, device_id: str, token: str) -> boo
     return False
 
 
+def device_id_for_token(hass: Any, token: str) -> str | None:
+    """Return the configured receiver's device id that owns this pairing token.
+
+    The pairing token is the receiver's secret, so it identifies the receiver even
+    when the entry was added by IP (device id `manual-<host>-<port>`) and the TV
+    reports its hardware id instead.
+    """
+
+    if not token:
+        return None
+    entries = getattr(hass, "data", {}).get(DOMAIN, {}).get("entries", {})
+    for entry in entries.values():
+        data = getattr(entry, "data", {})
+        stored_token = str(data.get(CONF_TOKEN, ""))
+        if stored_token and compare_digest(stored_token, token):
+            device_id = data.get(CONF_DEVICE_ID)
+            return str(device_id) if device_id else None
+    return None
+
+
 def _register_disconnect_cleanup(
     hass: Any,
     connection: Any,

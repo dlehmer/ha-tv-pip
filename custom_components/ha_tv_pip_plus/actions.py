@@ -312,7 +312,7 @@ def _build_action_view() -> Any:
         HomeAssistantView,
     )
 
-    from .remote import _token_matches_config_entry
+    from .remote import device_id_for_token
 
     class HaTvPipActionView(HomeAssistantView):  # type: ignore[misc]
         """Receives button presses from paired receivers."""
@@ -330,14 +330,17 @@ def _build_action_view() -> Any:
                 body = await request.json()
             except ValueError:
                 return self.json({"error": "invalid JSON"}, status_code=400)
-            device_id = str(body.get("deviceId", "")).strip()
+            reported_device_id = str(body.get("deviceId", "")).strip()
             action_id = str(body.get("actionId", "")).strip()
-            if not _token_matches_config_entry(hass, device_id=device_id, token=token):
+            device_id = device_id_for_token(hass, token)
+            if device_id is None:
                 _LOGGER.warning(
-                    "Rejected overlay action from unpaired receiver %s", device_id
+                    "Rejected overlay action from unpaired receiver %s",
+                    reported_device_id,
                 )
                 return self.json({"error": "unauthorized"}, status_code=401)
 
+            # Bind to the entry that owns the token, not the id the TV reports.
             action = pending_action_store(hass).take(action_id, device_id)
             if action is None:
                 return self.json(

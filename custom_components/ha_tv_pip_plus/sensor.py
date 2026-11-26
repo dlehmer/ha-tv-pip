@@ -333,6 +333,12 @@ class ReceiverLastCommandResultSensor(ReceiverEntity, SensorEntity):
         """Refresh state after a command result is stored."""
 
         self._refresh_from_hass_data()
+        # The dispatcher may call this from a worker thread; schedule the state
+        # write onto the event loop instead of writing it from here.
+        schedule_update = getattr(self, "schedule_update_ha_state", None)
+        if callable(schedule_update) and getattr(self, "hass", None) is not None:
+            schedule_update()
+            return
         async_write_ha_state = getattr(self, "async_write_ha_state", None)
         if callable(async_write_ha_state):
             async_write_ha_state()

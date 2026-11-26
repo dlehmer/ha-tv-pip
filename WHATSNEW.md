@@ -1,5 +1,10 @@
 # What's New ✨
 
+## 1.33.1 - Door Button Fix 🔧
+
+- Fixed door buttons being rejected for TVs added by IP address 🔓
+- Fixed two Home Assistant warnings about thread safety and file reads 🧹
+
 ## 1.33.0 - HA TV PiP Plus: Door Buttons 🔓
 
 - Renamed to HA TV PiP Plus so it installs alongside the original app 📦

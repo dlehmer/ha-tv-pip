@@ -171,3 +171,31 @@ def test_settings_form_round_trip() -> None:
 
     _, error = camera_buttons_from_form({"camera_1": "camera.front"})
     assert error == "camera_button_incomplete"
+
+
+def test_manually_added_receiver_is_found_by_pairing_token() -> None:
+    import types
+
+    from custom_components.ha_tv_pip_plus.const import (
+        CONF_DEVICE_ID,
+        CONF_TOKEN,
+        DOMAIN,
+    )
+    from custom_components.ha_tv_pip_plus.remote import device_id_for_token
+
+    entry = types.SimpleNamespace(
+        data={CONF_DEVICE_ID: "manual-10.0.1.248-8767", CONF_TOKEN: "secret-token"}
+    )
+    hass = types.SimpleNamespace(data={DOMAIN: {"entries": {"e1": entry}}})
+
+    # The TV reports its hardware id, which differs from the manual entry's id;
+    # the token alone identifies the entry.
+    assert device_id_for_token(hass, "secret-token") == "manual-10.0.1.248-8767"
+    assert device_id_for_token(hass, "wrong-token") is None
+    assert device_id_for_token(hass, "") is None
+
+    store = PendingActionStore()
+    wire = store.replace_for_device(
+        "manual-10.0.1.248-8767", [UNLOCK], ttl_seconds=30, now=0
+    )
+    assert store.take(wire[0]["id"], "manual-10.0.1.248-8767", now=1) is not None

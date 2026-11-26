@@ -1,0 +1,2 @@
+- Fixed door buttons being rejected for TVs added by IP address 🔓
+- Fixed two Home Assistant warnings about thread safety and file reads 🧹

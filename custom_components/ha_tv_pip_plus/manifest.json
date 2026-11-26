@@ -12,7 +12,7 @@
   "requirements": [
     "adb-shell[async]==0.4.4"
   ],
-  "version": "1.33.0",
+  "version": "1.33.1",
   "zeroconf": [
     {
       "type": "_ha-tv-pip-plus._tcp.local."

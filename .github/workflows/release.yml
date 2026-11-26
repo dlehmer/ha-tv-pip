@@ -397,7 +397,7 @@ jobs:
           packageName: com.hatvpip.receiver
           releaseFiles: dist/ha-tv-pip-plus-android-release-v${{ needs.setup.outputs.version }}.aab
           tracks: ${{ env.PLAY_STORE_TRACK }}
-          releaseName: HA TV PiP v${{ needs.setup.outputs.version }}
+          releaseName: HA TV PiP Plus v${{ needs.setup.outputs.version }}
           status: ${{ env.PLAY_STORE_RELEASE_STATUS }}
 
   publish:
@@ -492,7 +492,7 @@ jobs:
             "dist/ha-tv-pip-plus-integration.zip" \
             --draft \
             --target "${{ github.sha }}" \
-            --title "HA TV PiP v$RELEASE_VERSION" \
+            --title "HA TV PiP Plus v$RELEASE_VERSION" \
             --notes-file dist/release-notes.md
           echo "publish=true" >> "$GITHUB_OUTPUT"
 

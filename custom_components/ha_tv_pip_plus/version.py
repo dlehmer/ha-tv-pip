@@ -6,9 +6,7 @@ import json
 from pathlib import Path
 
 
-def integration_version() -> str:
-    """Return the installed Home Assistant integration version."""
-
+def _read_manifest_version() -> str:
     manifest_path = Path(__file__).with_name("manifest.json")
     try:
         with manifest_path.open(encoding="utf-8") as manifest_file:
@@ -16,6 +14,15 @@ def integration_version() -> str:
     except (OSError, json.JSONDecodeError):
         return "unknown"
     return str(manifest.get("version", "unknown"))
+
+
+_INTEGRATION_VERSION = _read_manifest_version()
+
+
+def integration_version() -> str:
+    """Return the installed Home Assistant integration version (read at import)."""
+
+    return _INTEGRATION_VERSION
 
 
 def version_alignment(receiver_version: str | None) -> dict[str, str | bool]:
