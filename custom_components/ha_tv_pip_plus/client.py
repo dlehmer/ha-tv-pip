@@ -58,6 +58,7 @@ class ShowCameraCommand:
     actions: tuple[dict[str, Any], ...] = ()
     action_callback_url: str | None = None
     button_style: dict[str, Any] | None = None
+    media_focus: str | None = None
 
 
 def show_camera_payload(command: ShowCameraCommand) -> dict[str, Any]:
@@ -100,6 +101,8 @@ def show_camera_payload(command: ShowCameraCommand) -> dict[str, Any]:
         payload["width"] = command.width
     if command.height is not None:
         payload["height"] = command.height
+    if command.media_focus and command.media_focus != "none":
+        payload["mediaFocus"] = command.media_focus
     if command.actions and command.action_callback_url:
         payload["actions"] = [dict(action) for action in command.actions]
         payload["actionCallbackUrl"] = command.action_callback_url

@@ -529,6 +529,30 @@ granted, the popup is shown full screen without buttons, the TV's **Overlay
 permission** sensor turns off, and a Repairs notice explains the fix: press
 **Grant overlay permission** on the TV's device page (USB debugging must be on).
 
+## Updates 🔄
+
+Under **Settings → Updates** you'll find:
+
+- **HA TV PiP Plus integration**: press **Install** and Home Assistant downloads the
+  newest release from GitHub and replaces this integration's files itself (the previous
+  version is kept in `.ha_tv_pip_plus_backup` in your config folder). Restart Home
+  Assistant when the Repairs notice asks.
+- **TV app** (one per TV): press **Install** to update the app over network ADB (USB
+  debugging on). With **Update TV apps automatically** on (the default, in **Customize
+  popups, buttons and updates**), TVs update themselves within an hour of a new release.
+
+## Popup Timing and Playback ⏱️
+
+In **Customize popups, buttons and updates**:
+
+- **How long popups stay up** (default 30 s) applies unless an automation sets
+  `duration_seconds` or the TV has its own default duration.
+- **After unlocking or opening** a door, the popup stays until it's secured, for at most
+  the time you set (default 15 minutes).
+- **When a popup appears**, what's playing can keep playing, pause and resume after, or
+  keep playing more quietly. This uses Android audio focus, which Netflix, YouTube, Plex
+  and most streaming apps follow; some live-TV apps may ignore it.
+
 ## Known Limitations 🚧
 
 - Some Android TV devices reject native PiP for sideloaded apps; the receiver includes an overlay fallback when permission is granted.

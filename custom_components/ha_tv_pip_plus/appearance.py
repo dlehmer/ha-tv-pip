@@ -22,6 +22,11 @@ TEXT_MODE_OVER_VIDEO = "over_video"
 TEXT_MODE_BELOW_VIDEO = "below_video"
 TEXT_MODES = (TEXT_MODE_NONE, TEXT_MODE_OVER_VIDEO, TEXT_MODE_BELOW_VIDEO)
 
+MEDIA_KEEP_PLAYING = "none"
+MEDIA_PAUSE = "pause"
+MEDIA_LOWER_VOLUME = "duck"
+MEDIA_BEHAVIORS = (MEDIA_KEEP_PLAYING, MEDIA_PAUSE, MEDIA_LOWER_VOLUME)
+
 BUTTON_SHAPE_TILE = "tile"
 BUTTON_SHAPE_PILL = "pill"
 BUTTON_SHAPE_SQUARE = "square"
@@ -46,6 +51,11 @@ DEFAULT_APPEARANCE: dict[str, Any] = {
     "button_text_size": 16,
     "button_corner_radius": 12,
     "button_show_icon": True,
+    # Timing and playback.
+    "popup_duration": 30,
+    "unlocked_stay_minutes": 15,
+    "media_behavior": MEDIA_KEEP_PLAYING,
+    "auto_update_tv_apps": True,
 }
 
 LIMITS = {
@@ -57,6 +67,8 @@ LIMITS = {
     "button_background_opacity": (0, 100),
     "button_text_size": (10, 32),
     "button_corner_radius": (0, 40),
+    "popup_duration": (5, 600),
+    "unlocked_stay_minutes": (1, 120),
 }
 
 
@@ -77,6 +89,9 @@ def normalize_appearance(raw: Any) -> dict[str, Any]:
     shape = str(raw.get("button_shape", BUTTON_SHAPE_TILE))
     result["button_shape"] = shape if shape in BUTTON_SHAPES else BUTTON_SHAPE_TILE
     result["button_show_icon"] = bool(raw.get("button_show_icon", True))
+    result["auto_update_tv_apps"] = bool(raw.get("auto_update_tv_apps", True))
+    media = str(raw.get("media_behavior", MEDIA_KEEP_PLAYING))
+    result["media_behavior"] = media if media in MEDIA_BEHAVIORS else MEDIA_KEEP_PLAYING
     for key in (
         "title_color",
         "message_color",
@@ -186,6 +201,7 @@ def apply_appearance(
     appearance: dict[str, Any],
     *,
     camera_title: str,
+    use_popup_duration: bool = False,
 ) -> Any:
     """Apply saved appearance to a show request, field by field.
 
@@ -213,4 +229,6 @@ def apply_appearance(
         changes["width"] = appearance["width"]
     if "height" not in data and request.height is None and appearance["height"]:
         changes["height"] = appearance["height"]
+    if use_popup_duration and "duration_seconds" not in data:
+        changes["duration_seconds"] = appearance["popup_duration"]
     return replace(request, **changes) if changes else request

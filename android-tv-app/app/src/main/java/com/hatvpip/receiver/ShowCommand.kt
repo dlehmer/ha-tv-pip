@@ -25,7 +25,9 @@ data class ShowCommand(
     val muted: Boolean = true,
     val actions: List<OverlayAction> = emptyList(),
     val actionCallbackUrl: String? = null,
-    val buttonStyle: ButtonStyle = ButtonStyle()
+    val buttonStyle: ButtonStyle = ButtonStyle(),
+    /** "none", "pause" (pause other apps, resume after) or "duck" (lower their volume). */
+    val mediaFocus: String = MEDIA_FOCUS_NONE
 ) {
     val hasActions: Boolean
         get() = actions.isNotEmpty() && actionCallbackUrl != null
@@ -115,6 +117,7 @@ data class ShowCommand(
                     muted = json.optBoolean("muted", true),
                     actions = OverlayAction.listFromJson(json),
                     buttonStyle = ButtonStyle.fromJson(json.optJSONObject("buttonStyle")),
+                    mediaFocus = mediaFocusFrom(json.optString("mediaFocus", MEDIA_FOCUS_NONE)),
                     actionCallbackUrl = json.optString("actionCallbackUrl").trim().ifBlank { null }
                         ?.also {
                             require(it.startsWith("http://") || it.startsWith("https://")) {
@@ -130,6 +133,16 @@ data class ShowCommand(
             }
     }
 }
+
+const val MEDIA_FOCUS_NONE = "none"
+const val MEDIA_FOCUS_PAUSE = "pause"
+const val MEDIA_FOCUS_DUCK = "duck"
+
+fun mediaFocusFrom(value: String?): String =
+    when (value) {
+        MEDIA_FOCUS_PAUSE, MEDIA_FOCUS_DUCK -> value
+        else -> MEDIA_FOCUS_NONE
+    }
 
 /**
  * A button shown under the overlay media. The receiver never decides what an action does:

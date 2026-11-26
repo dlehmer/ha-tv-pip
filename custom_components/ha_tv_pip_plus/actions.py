@@ -347,11 +347,19 @@ def actions_schema(vol: Any, cv: Any) -> Any:
 DATA_SECURED_WATCHERS = "secured_watchers"
 
 
+def _unlocked_stay_seconds(hass: Any) -> int:
+    from .appearance import popup_appearance
+
+    return int(popup_appearance(hass)["unlocked_stay_minutes"]) * 60
+
+
 def async_close_when_secured(
     hass: Any,
     device_id: str,
     entity_id: str,
     secured_state: str,
+    *,
+    give_up_after: int = FOLLOW_UP_TTL_SECONDS,
 ) -> None:
     """Close the receiver's popup once `entity_id` is back to `secured_state`.
 
@@ -393,7 +401,7 @@ def async_close_when_secured(
         async_track_state_change_event(hass, [entity_id], _async_state_changed)
     )
     unsubscribers.append(
-        async_call_later(hass, FOLLOW_UP_TTL_SECONDS, _async_timeout)
+        async_call_later(hass, give_up_after, _async_timeout)
     )
     watchers[device_id] = _stop
 
@@ -498,16 +506,22 @@ def _build_action_view() -> Any:
                 )
 
             response: dict[str, Any] = {"ok": True, "label": action.label}
+            stay_seconds = _unlocked_stay_seconds(hass)
             if action.follow_up:
                 wire = pending_action_store(hass).replace_for_device(
                     device_id,
                     [action.follow_up],
-                    ttl_seconds=FOLLOW_UP_TTL_SECONDS,
+                    ttl_seconds=stay_seconds,
                 )
                 response["next"] = wire[0]
+                response["stayOpenSeconds"] = stay_seconds
             if action.watch_entity and action.secured_state:
                 async_close_when_secured(
-                    hass, device_id, action.watch_entity, action.secured_state
+                    hass,
+                    device_id,
+                    action.watch_entity,
+                    action.secured_state,
+                    give_up_after=stay_seconds,
                 )
             return self.json(response)
 

@@ -642,7 +642,7 @@ async def async_handle_show_camera(hass: Any, call: Any) -> None:
         _validate_camera_entity(hass, request.stream_camera_entity)
     receiver = _resolve_receiver(hass, request)
     request = _apply_camera_defaults(request, receiver, duration_fallback=30)
-    request = _with_popup_appearance(hass, request, call)
+    request = _with_popup_appearance(hass, request, call, receiver)
     title = request.title or _camera_title(hass, request.camera_entity)
     remote = remote_registry(hass)
     prefer_external = _prefer_remote_transport(receiver, remote)
@@ -748,7 +748,7 @@ async def async_handle_show_snapshot(hass: Any, call: Any) -> None:
     _validate_camera_entity(hass, request.camera_entity)
     receiver = _resolve_receiver(hass, request)
     request = _apply_camera_defaults(request, receiver, duration_fallback=10)
-    request = _with_popup_appearance(hass, request, call)
+    request = _with_popup_appearance(hass, request, call, receiver)
     remote = remote_registry(hass)
     prefer_external = _prefer_remote_transport(receiver, remote)
     capabilities = await _async_receiver_capabilities(receiver)
@@ -1490,14 +1490,27 @@ async def _async_send_receiver_command(
     return "local"
 
 
-def _with_popup_appearance(hass: Any, request: Any, call: Any) -> Any:
-    """Apply the saved popup appearance to fields the automation left out."""
+def _with_popup_appearance(
+    hass: Any, request: Any, call: Any, receiver: ReceiverEntry
+) -> Any:
+    """Apply the saved popup appearance to fields the automation left out.
 
+    The saved popup duration applies unless the automation set one, or the TV
+    has its own default duration in its settings.
+    """
+
+    receiver_duration = _receiver_default_int(
+        receiver.options,
+        CONF_DEFAULT_DURATION_SECONDS,
+        minimum=1,
+        maximum=3600,
+    )
     return apply_appearance(
         request,
         dict(getattr(call, "data", {})),
         popup_appearance(hass),
         camera_title=_camera_title(hass, request.camera_entity),
+        use_popup_duration=not receiver_duration,
     )
 
 
@@ -1512,6 +1525,9 @@ def _with_overlay_actions(
     """Attach one-time overlay action buttons to a show command."""
 
     store = pending_action_store(hass)
+    command = replace(
+        command, media_focus=popup_appearance(hass)["media_behavior"]
+    )
     if ATTR_ACTIONS in call.data:
         # Explicit buttons from the automation win; `actions: []` hides buttons.
         specs = list(call.data.get(ATTR_ACTIONS) or [])

@@ -23,6 +23,7 @@ from .adb_setup import (
 )
 from .appearance import (
     BUTTON_SHAPES,
+    MEDIA_BEHAVIORS,
     TEXT_MODES,
     async_save_appearance,
     hex_to_rgb,
@@ -749,6 +750,18 @@ def appearance_form_fields(current: dict[str, Any]) -> dict[Any, Any]:
             "button_corner_radius", default=current["button_corner_radius"]
         ): number(0, 40, "px"),
         vol.Required("button_show_icon", default=current["button_show_icon"]): bool,
+        vol.Required(
+            "popup_duration", default=current["popup_duration"]
+        ): number(5, 600, "s"),
+        vol.Required(
+            "unlocked_stay_minutes", default=current["unlocked_stay_minutes"]
+        ): number(1, 120, "min"),
+        vol.Required("media_behavior", default=current["media_behavior"]): choice(
+            MEDIA_BEHAVIORS, "media_behavior"
+        ),
+        vol.Required(
+            "auto_update_tv_apps", default=current["auto_update_tv_apps"]
+        ): bool,
     }
 
 

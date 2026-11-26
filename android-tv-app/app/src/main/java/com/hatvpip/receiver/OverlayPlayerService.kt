@@ -1,6 +1,9 @@
 package com.hatvpip.receiver
 
 import android.app.Service
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -55,6 +58,8 @@ class OverlayPlayerService : Service() {
     private var actionInFlight: Boolean = false
     private val actionButtons = mutableListOf<ActionButton>()
     private var buttonStyle: ButtonStyle = ButtonStyle()
+    private var mediaFocus: String = MEDIA_FOCUS_NONE
+    private var audioFocusRequest: AudioFocusRequest? = null
     @Volatile private var mjpegRunning: Boolean = false
     private var mjpegThread: Thread? = null
     private val autoCloseHandler = Handler(Looper.getMainLooper())
@@ -125,6 +130,7 @@ class OverlayPlayerService : Service() {
                 buttonStyle = ButtonStyle.fromJsonString(
                     intent?.getStringExtra(PlayerActivity.EXTRA_BUTTON_STYLE_JSON)
                 )
+                mediaFocus = mediaFocusFrom(intent?.getStringExtra(PlayerActivity.EXTRA_MEDIA_FOCUS))
                 actionInFlight = false
                 showOverlay()
             }
@@ -206,6 +212,7 @@ class OverlayPlayerService : Service() {
         runCatching {
             windowManager.addView(root, params)
             overlayView = root
+            requestMediaFocus()
             actionButtons.firstOrNull()?.root?.let { button -> button.post { button.requestFocus() } }
             updatePlaybackState(
                 status = if (streamType == StreamType.Notification) PlaybackStatus.Ready else PlaybackStatus.Buffering,
@@ -264,6 +271,7 @@ class OverlayPlayerService : Service() {
         runCatching {
             windowManager.addView(mediaRoot, mediaParams)
             overlayView = mediaRoot
+            requestMediaFocus()
             windowManager.addView(footer, footerParams)
             textOverlayView = footer
             updatePlaybackState(
@@ -489,7 +497,9 @@ class OverlayPlayerService : Service() {
                         // Door unlocked / garage opened: keep the video up and offer
                         // Lock / Close. Home Assistant closes the popup once secured.
                         button.show(next)
-                        autoCloseHandler.postDelayed({ stopSelf() }, FOLLOW_UP_CLOSE_DELAY_MS)
+                        val staySeconds = response.optLong("stayOpenSeconds", 0L)
+                        val stayMillis = if (staySeconds > 0) staySeconds * 1_000L else FOLLOW_UP_CLOSE_DELAY_MS
+                        autoCloseHandler.postDelayed({ stopSelf() }, stayMillis)
                     } else {
                         button.setLabel(getString(R.string.overlay_action_done))
                         autoCloseHandler.postDelayed({ stopSelf() }, ACTION_SUCCESS_CLOSE_DELAY_MS)
@@ -917,7 +927,43 @@ class OverlayPlayerService : Service() {
         return imageView
     }
 
+    /**
+     * Pause or quiet whatever is playing while the popup is up. Taking transient
+     * audio focus makes well-behaved apps (Netflix, YouTube, Plex, ...) pause or
+     * duck, and resume on their own when the focus is given back in [removeOverlay].
+     */
+    private fun requestMediaFocus() {
+        if (mediaFocus == MEDIA_FOCUS_NONE || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
+        val gain = if (mediaFocus == MEDIA_FOCUS_DUCK) {
+            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+        } else {
+            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+        }
+        val request = AudioFocusRequest.Builder(gain)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            .setOnAudioFocusChangeListener { }
+            .build()
+        runCatching { audioManager.requestAudioFocus(request) }
+            .onSuccess { audioFocusRequest = request }
+            .onFailure { AppLog.error("Could not pause playback for the popup", it) }
+    }
+
+    private fun abandonMediaFocus() {
+        val request = audioFocusRequest ?: return
+        audioFocusRequest = null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
+        runCatching { audioManager.abandonAudioFocusRequest(request) }
+    }
+
     private fun removeOverlay() {
+        abandonMediaFocus()
         mainHandler.removeCallbacksAndMessages(null)
         actionButtons.clear()
         armedActionId = null

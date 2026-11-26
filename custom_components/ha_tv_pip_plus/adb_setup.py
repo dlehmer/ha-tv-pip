@@ -260,7 +260,21 @@ def _load_signer(hass: Any) -> Any:
     return PythonRSASigner(public_key, private_key)
 
 
-async def _async_latest_apk(hass: Any) -> tuple[str, str, str]:
+DATA_LATEST_RELEASE = "latest_release"
+RELEASE_CACHE_SECONDS = 60 * 60
+
+
+async def async_latest_release(hass: Any, *, force: bool = False) -> dict[str, Any]:
+    """The newest GitHub release (cached for an hour)."""
+
+    import time
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    cached = domain_data.get(DATA_LATEST_RELEASE)
+    now = time.monotonic()
+    if not force and cached and now - cached[0] < RELEASE_CACHE_SECONDS:
+        return dict(cached[1])
+
     session = _client_session(hass)
     try:
         async with session.get(
@@ -275,7 +289,24 @@ async def _async_latest_apk(hass: Any) -> tuple[str, str, str]:
         raise
     except Exception as error:  # noqa: BLE001
         raise AdbSetupError("download_failed", str(error)) from error
-    return pick_release_apk(release)
+    domain_data[DATA_LATEST_RELEASE] = (now, release)
+    return dict(release)
+
+
+def release_version(release: dict[str, Any]) -> str:
+    """'v1.36.0' -> '1.36.0'."""
+
+    return str(release.get("tag_name") or release.get("name") or "").strip().lstrip("v")
+
+
+async def async_download(hass: Any, url: str, path: str) -> None:
+    """Download `url` to `path` with Home Assistant's HTTP session."""
+
+    await _async_download(hass, url, path)
+
+
+async def _async_latest_apk(hass: Any) -> tuple[str, str, str]:
+    return pick_release_apk(await async_latest_release(hass, force=True))
 
 
 def pick_release_apk(release: dict[str, Any]) -> tuple[str, str, str]:

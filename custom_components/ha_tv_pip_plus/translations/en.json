@@ -76,7 +76,7 @@
           "prefer_remote_transport": "Prefer remote transport",
           "show_advanced_options": "Show advanced settings",
           "edit_camera_buttons": "Set up door buttons for cameras",
-          "edit_popup_appearance": "Customize popup and button appearance"
+          "edit_popup_appearance": "Customize popups, buttons and updates"
         },
         "description": "Set everyday receiver defaults. Advanced popup size, position, and remote receiver credentials are hidden unless needed.",
         "title": "Receiver defaults"
@@ -111,8 +111,8 @@
         }
       },
       "appearance": {
-        "title": "Popup and button appearance",
-        "description": "How camera popups and door buttons look on every TV. Changes apply to the next popup; no app update needed. Automations can still override popup text per popup.\n\nWidth and height of 0 use the built-in size (640 × 360). Button defaults match Home Assistant's dashboard tiles.",
+        "title": "Popups, buttons and updates",
+        "description": "Settings shared by every TV. Changes apply to the next popup; no app update needed. Automations can still set popup text or duration per popup.\n\nPopup duration applies unless an automation or the TV's own default duration sets one. Width and height of 0 use the built-in size (640 × 360). Button defaults match Home Assistant's dashboard tiles. Pausing works with most streaming apps (they pause and resume); some live-TV apps may ignore it.",
         "data": {
           "text_mode": "Text",
           "title_size": "Title size",
@@ -130,7 +130,11 @@
           "button_accent_color": "Button highlight color (selected button and icon)",
           "button_text_size": "Button text size",
           "button_corner_radius": "Button corner roundness",
-          "button_show_icon": "Show button icons"
+          "button_show_icon": "Show button icons",
+          "popup_duration": "How long popups stay up",
+          "unlocked_stay_minutes": "After unlocking or opening, stay up until secured, for at most",
+          "media_behavior": "When a popup appears, what's playing on the TV should",
+          "auto_update_tv_apps": "Update TV apps automatically (needs USB debugging on the TV)"
         }
       }
     }
@@ -208,6 +212,11 @@
     "switch": {
       "hide_launcher": {
         "name": "Hide Launcher"
+      }
+    },
+    "update": {
+      "tv_app": {
+        "name": "TV app"
       }
     }
   },
@@ -636,6 +645,10 @@
     "receiver_overlay_permission": {
       "title": "{receiver} can't show door buttons",
       "description": "The HA TV PiP Plus app on {receiver} isn't allowed to display over other apps, so popups open full screen without buttons.\n\nTo fix it, open the TV's device page in Home Assistant and press **Grant Overlay Permission** (USB debugging must be on in the TV's developer options; accept the 'Allow debugging?' prompt on the TV the first time). Or, on the TV, open HA TV PiP Plus and select **Overlay Settings**."
+    },
+    "restart_required": {
+      "title": "Restart Home Assistant to finish updating HA TV PiP Plus",
+      "description": "HA TV PiP Plus {version} is installed. Restart Home Assistant (Settings > System > Restart) to start using it."
     }
   },
   "selector": {
@@ -651,6 +664,13 @@
         "tile": "Tile (like Home Assistant dashboards)",
         "pill": "Pill",
         "square": "Square"
+      }
+    },
+    "media_behavior": {
+      "options": {
+        "none": "Keep playing",
+        "pause": "Pause, then resume after the popup",
+        "duck": "Keep playing, with the volume lowered"
       }
     }
   }

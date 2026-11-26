@@ -46,3 +46,23 @@ class ButtonStyleTest {
         org.junit.Assert.assertEquals("tile", style.shape)
     }
 }
+
+class MediaFocusTest {
+    @Test
+    fun parsesMediaFocusFromShowCommand() {
+        val pause = ShowCommand.fromJson(
+            """{"url": "https://example.com/a.jpg", "streamType": "snapshot", "mediaFocus": "pause"}"""
+        ).getOrThrow()
+        org.junit.Assert.assertEquals(MEDIA_FOCUS_PAUSE, pause.mediaFocus)
+
+        val unknown = ShowCommand.fromJson(
+            """{"url": "https://example.com/a.jpg", "streamType": "snapshot", "mediaFocus": "loud"}"""
+        ).getOrThrow()
+        org.junit.Assert.assertEquals(MEDIA_FOCUS_NONE, unknown.mediaFocus)
+
+        val absent = ShowCommand.fromJson(
+            """{"url": "https://example.com/a.jpg", "streamType": "snapshot"}"""
+        ).getOrThrow()
+        org.junit.Assert.assertEquals(MEDIA_FOCUS_NONE, absent.mediaFocus)
+    }
+}

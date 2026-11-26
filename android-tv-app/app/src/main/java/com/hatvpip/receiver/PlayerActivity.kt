@@ -393,6 +393,7 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_ACTIONS_JSON = "com.hatvpip.receiver.extra.ACTIONS_JSON"
         const val EXTRA_ACTION_CALLBACK_URL = "com.hatvpip.receiver.extra.ACTION_CALLBACK_URL"
         const val EXTRA_BUTTON_STYLE_JSON = "com.hatvpip.receiver.extra.BUTTON_STYLE_JSON"
+        const val EXTRA_MEDIA_FOCUS = "com.hatvpip.receiver.extra.MEDIA_FOCUS"
         const val TEST_STREAM_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
         private const val REMOTE_PIP_DELAY_MS = 750L
 
@@ -473,10 +474,12 @@ private fun Intent.toShowCommand(): ShowCommand =
         enterPip = getBooleanExtra(PlayerActivity.EXTRA_ENTER_PIP, false),
         actions = OverlayAction.listFromJsonString(getStringExtra(PlayerActivity.EXTRA_ACTIONS_JSON)),
         actionCallbackUrl = getStringExtra(PlayerActivity.EXTRA_ACTION_CALLBACK_URL),
-        buttonStyle = ButtonStyle.fromJsonString(getStringExtra(PlayerActivity.EXTRA_BUTTON_STYLE_JSON))
+        buttonStyle = ButtonStyle.fromJsonString(getStringExtra(PlayerActivity.EXTRA_BUTTON_STYLE_JSON)),
+        mediaFocus = mediaFocusFrom(getStringExtra(PlayerActivity.EXTRA_MEDIA_FOCUS))
     )
 
 internal fun Intent.putActionExtras(command: ShowCommand): Intent {
+    putExtra(PlayerActivity.EXTRA_MEDIA_FOCUS, command.mediaFocus)
     if (command.hasActions) {
         putExtra(PlayerActivity.EXTRA_ACTIONS_JSON, OverlayAction.listToJsonString(command.actions))
         putExtra(PlayerActivity.EXTRA_ACTION_CALLBACK_URL, command.actionCallbackUrl)

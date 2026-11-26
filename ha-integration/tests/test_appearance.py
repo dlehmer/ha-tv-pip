@@ -105,3 +105,37 @@ def test_button_style_from_settings() -> None:
     assert style["accentColor"] == "#FF9800"
     assert style["backgroundColor"].startswith("#FF")
     assert style["showIcon"] is False
+
+
+def test_popup_duration_and_media_settings() -> None:
+    look = normalize_appearance(
+        {"popup_duration": 2, "media_behavior": "pause", "unlocked_stay_minutes": 500}
+    )
+    assert look["popup_duration"] == 5
+    assert look["media_behavior"] == "pause"
+    assert look["unlocked_stay_minutes"] == 120
+    assert normalize_appearance({"media_behavior": "loud"})["media_behavior"] == "none"
+
+
+def test_popup_duration_applies_only_when_not_set() -> None:
+    @dataclass(frozen=True)
+    class _Timed(_Request):
+        duration_seconds: int | None = 30
+
+    look = normalize_appearance({"popup_duration": 90})
+    applied = apply_appearance(
+        _Timed(), {}, look, camera_title="Cam", use_popup_duration=True
+    )
+    assert applied.duration_seconds == 90
+    kept = apply_appearance(
+        _Timed(duration_seconds=10),
+        {"duration_seconds": 10},
+        look,
+        camera_title="Cam",
+        use_popup_duration=True,
+    )
+    assert kept.duration_seconds == 10
+    receiver_default = apply_appearance(
+        _Timed(duration_seconds=45), {}, look, camera_title="Cam"
+    )
+    assert receiver_default.duration_seconds == 45

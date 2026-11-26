@@ -17,5 +17,8 @@
     {
       "type": "_ha-tv-pip-plus._tcp.local."
     }
+  ],
+  "dependencies": [
+    "http"
   ]
 }
