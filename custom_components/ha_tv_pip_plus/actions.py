@@ -210,6 +210,15 @@ async def async_save_camera_buttons(hass: Any, raw: Any) -> dict[str, dict[str, 
     return pairings
 
 
+def mirrored_label(label: str, fallback: str) -> str:
+    """'Unlock Front Door' -> 'Lock Front Door', 'Open Garage' -> 'Close Garage'."""
+
+    for opener, closer in (("unlock ", "Lock "), ("open ", "Close ")):
+        if label.lower().startswith(opener):
+            return (closer + label[len(opener) :])[:40]
+    return fallback
+
+
 def default_action_spec(hass: Any, camera_entity: str | None) -> dict[str, Any] | None:
     """Build the button for a camera from its configured pairing, if any."""
 
@@ -271,8 +280,12 @@ def default_action_spec(hass: Any, camera_entity: str | None) -> dict[str, Any] 
     else:
         return None
 
-    spec["label"] = (pairing.get("label") or label)[:40]
+    custom_label = pairing.get("label")
+    spec["label"] = (custom_label or label)[:40]
     spec["icon"] = icon
+    follow_up = spec.get("follow_up")
+    if custom_label and follow_up:
+        follow_up["label"] = mirrored_label(custom_label, follow_up["label"])
     spec["confirm"] = True
     return spec
 

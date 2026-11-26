@@ -1,5 +1,9 @@
 # What's New ✨
 
+## 1.35.1 - Matching Button Labels 🏷️
+
+- Lock and Close buttons mirror your custom label: Unlock Front Door becomes Lock Front Door 🔁
+
 ## 1.35.0 - Stay Until Secured 🔒
 
 - After unlocking or opening, the video stays and the button becomes Lock or Close 🔁

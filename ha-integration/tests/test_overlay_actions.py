@@ -236,3 +236,22 @@ def test_open_garage_offers_close_with_confirmation() -> None:
     assert spec["follow_up"]["label"] == "Close Garage"
     assert spec["follow_up"]["confirm"] is True
     assert spec["secured_state"] == "closed"
+
+
+def test_follow_up_mirrors_custom_label() -> None:
+    from custom_components.ha_tv_pip_plus.actions import (
+        default_action_spec,
+        mirrored_label,
+    )
+
+    assert mirrored_label("Unlock Front Door", "x") == "Lock Front Door"
+    assert mirrored_label("Open Garage", "x") == "Close Garage"
+    assert mirrored_label("Let them in", "Lock Front door") == "Lock Front door"
+
+    hass = _Hass(
+        {"camera.front": {"entity_id": "lock.l", "label": "Unlock Front Door"}},
+        {"lock.l": _State("Front door lock")},
+    )
+    spec = default_action_spec(hass, "camera.front")
+    assert spec is not None
+    assert spec["follow_up"]["label"] == "Lock Front Door"

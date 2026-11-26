@@ -1,0 +1,1 @@
+- Lock and Close buttons mirror your custom label: Unlock Front Door becomes Lock Front Door 🔁
