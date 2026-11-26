@@ -1,5 +1,12 @@
 # What's New ✨
 
+## 1.35.0 - Stay Until Secured 🔒
+
+- After unlocking or opening, the video stays and the button becomes Lock or Close 🔁
+- The popup closes once the door is locked or the garage closed again ✅
+- Set popup text, colors and size, and button style, from Home Assistant 🎨
+- Buttons look like Home Assistant dashboard tiles by default 🧩
+
 ## 1.34.0 - Automatic Pairing 🤝
 
 - Adding a TV with "Install the app" now pairs automatically over ADB; no code to type 🔑

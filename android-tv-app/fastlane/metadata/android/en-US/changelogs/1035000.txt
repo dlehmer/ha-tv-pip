@@ -1,0 +1,4 @@
+- After unlocking or opening, the video stays and the button becomes Lock or Close 🔁
+- The popup closes once the door is locked or the garage closed again ✅
+- Set popup text, colors and size, and button style, from Home Assistant 🎨
+- Buttons look like Home Assistant dashboard tiles by default 🧩
