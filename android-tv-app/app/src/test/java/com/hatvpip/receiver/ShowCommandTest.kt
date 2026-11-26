@@ -270,4 +270,56 @@ class ShowCommandTest {
         assertTrue(result.isFailure)
         assertEquals("Unsupported `streamType`: mp4", result.exceptionOrNull()?.message)
     }
+
+    @Test
+    fun parsesOverlayActions() {
+        val command = ShowCommand.fromJson(
+            """
+            {
+              "url": "https://example.com/front-door.jpg",
+              "streamType": "snapshot",
+              "actionCallbackUrl": "http://homeassistant.local:8123/api/ha_tv_pip/action",
+              "actions": [
+                {"id": "abc123", "label": "Unlock Front Door", "icon": "mdi:lock-open"},
+                {"id": "def456", "label": "Open Garage", "confirm": false}
+              ]
+            }
+            """.trimIndent()
+        ).getOrThrow()
+
+        assertTrue(command.hasActions)
+        assertEquals(2, command.actions.size)
+        assertEquals("abc123", command.actions[0].id)
+        assertTrue(command.actions[0].confirm)
+        assertFalse(command.actions[1].confirm)
+        assertEquals("mdi:lock-open", command.actions[0].icon)
+    }
+
+    @Test
+    fun actionsWithoutCallbackUrlAreInactive() {
+        val command = ShowCommand.fromJson(
+            """{"url": "https://example.com/a.jpg", "streamType": "snapshot",
+               "actions": [{"id": "x", "label": "Unlock"}]}"""
+        ).getOrThrow()
+
+        assertFalse(command.hasActions)
+    }
+
+    @Test
+    fun rejectsActionWithoutId() {
+        val result = ShowCommand.fromJson(
+            """{"url": "https://example.com/a.jpg", "streamType": "snapshot",
+               "actionCallbackUrl": "http://ha.local/api/ha_tv_pip/action",
+               "actions": [{"label": "Unlock"}]}"""
+        )
+
+        assertTrue(result.isFailure)
+        assertEquals("`actions[0].id` is required", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun overlayActionsRoundTripThroughIntentJson() {
+        val actions = listOf(OverlayAction(id = "a", label = "Unlock", icon = "unlock", confirm = true))
+        assertEquals(actions, OverlayAction.listFromJsonString(OverlayAction.listToJsonString(actions)))
+    }
 }

@@ -141,4 +141,8 @@
     <string name="troubleshooting_discovery">Erkennung: TV und Home Assistant müssen im selben Netzwerk sein und der lokale Endpunkt muss laufen.</string>
     <string name="troubleshooting_remote">Remote-Receiver: Prüfe, ob Home Assistant die externe URL und das Token gespeichert hat, und nutze dann Remote-Konfiguration synchronisieren.</string>
     <string name="troubleshooting_launcher">Ausgeblendeter Launcher: Öffne diesen Bildschirm über Home Assistant „Launcher öffnen“ oder Android-Einstellungen &gt; Apps &gt; HA TV PiP.</string>
+    <string name="overlay_action_confirm">Zum Bestätigen erneut drücken</string>
+    <string name="overlay_action_working">Wird ausgeführt…</string>
+    <string name="overlay_action_done">✓ Erledigt</string>
+    <string name="overlay_action_failed">⚠ Fehlgeschlagen – erneut versuchen</string>
 </resources>

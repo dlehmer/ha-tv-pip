@@ -141,4 +141,8 @@
     <string name="troubleshooting_discovery">Descubrimiento: mantén la TV y Home Assistant en la misma red y comprueba que el endpoint local esté activo.</string>
     <string name="troubleshooting_remote">Receptor remoto: comprueba que Home Assistant haya guardado la URL externa y el token, y luego usa Sincronizar configuración remota.</string>
     <string name="troubleshooting_launcher">Lanzador oculto: usa Abrir lanzador en Home Assistant o Ajustes de Android &gt; Aplicaciones &gt; HA TV PiP para reabrir esta pantalla.</string>
+    <string name="overlay_action_confirm">Pulsa de nuevo para confirmar</string>
+    <string name="overlay_action_working">Procesando…</string>
+    <string name="overlay_action_done">✓ Hecho</string>
+    <string name="overlay_action_failed">⚠ Error: inténtalo de nuevo</string>
 </resources>

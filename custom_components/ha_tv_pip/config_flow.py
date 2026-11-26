@@ -9,6 +9,12 @@ from typing import Any, Protocol
 import voluptuous as vol  # type: ignore[import-not-found]
 from homeassistant import config_entries  # type: ignore[import-not-found]
 
+from .actions import (
+    BUTTON_TARGET_DOMAINS,
+    MAX_CAMERA_BUTTONS,
+    async_save_camera_buttons,
+    camera_buttons,
+)
 from .client import ReceiverClientError, async_confirm_pairing, async_start_pairing
 from .const import (
     CONF_API_VERSION,
@@ -20,6 +26,7 @@ from .const import (
     CONF_DEFAULT_STREAM_TYPE,
     CONF_DEFAULT_WIDTH,
     CONF_DEVICE_ID,
+    CONF_EDIT_CAMERA_BUTTONS,
     CONF_HOST,
     CONF_NAME,
     CONF_PAIRING,
@@ -243,6 +250,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
 
         self._config_entry = config_entry
         self._pending_basic_options: dict[str, Any] | None = None
+        self._advanced_after_camera_buttons = False
 
     @property
     def _entry(self) -> Any:
@@ -278,6 +286,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
             entry.options.get(CONF_PREFER_REMOTE_TRANSPORT, False)
         )
         show_advanced_options = False
+        edit_camera_buttons = False
 
         if user_input is not None:
             default_stream_type = str(
@@ -297,6 +306,9 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
             show_advanced_options = bool(
                 user_input.get(CONF_SHOW_ADVANCED_OPTIONS, False)
             )
+            edit_camera_buttons = bool(
+                user_input.get(CONF_EDIT_CAMERA_BUTTONS, False)
+            )
 
             if default_stream_type not in STREAM_TYPES:
                 errors[CONF_DEFAULT_STREAM_TYPE] = "invalid_default_stream_type"
@@ -309,6 +321,10 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                     default_snapshot_fallback=default_snapshot_fallback,
                     prefer_remote_transport=prefer_remote_transport,
                 )
+                if edit_camera_buttons:
+                    self._pending_basic_options = basic_options
+                    self._advanced_after_camera_buttons = show_advanced_options
+                    return await self.async_step_camera_buttons()
                 if show_advanced_options:
                     self._pending_basic_options = basic_options
                     return await self.async_step_advanced()
@@ -346,11 +362,71 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                         default=current_prefer_remote_transport,
                     ): bool,
                     vol.Optional(
+                        CONF_EDIT_CAMERA_BUTTONS,
+                        default=edit_camera_buttons,
+                    ): bool,
+                    vol.Optional(
                         CONF_SHOW_ADVANCED_OPTIONS,
                         default=show_advanced_options,
                     ): bool,
                 }
             ),
+            errors=errors,
+        )
+
+    async def async_step_camera_buttons(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Pair cameras with the lock, door, or script their popup button runs.
+
+        Pairings are shared by every receiver, so they only need setting once.
+        """
+
+        hass = getattr(self, "hass", None)
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            pairings, error = camera_buttons_from_form(user_input)
+            if error:
+                errors["base"] = error
+            else:
+                await async_save_camera_buttons(hass, pairings)
+                if self._advanced_after_camera_buttons:
+                    self._advanced_after_camera_buttons = False
+                    return await self.async_step_advanced()
+                basic = self._pending_basic_options or _current_basic_options(
+                    self._entry
+                )
+                self._pending_basic_options = None
+                return self.async_create_entry(
+                    title="",
+                    data=_options_with_preserved_advanced(self._entry, basic),
+                )
+            current = camera_buttons_form_values(user_input)
+        else:
+            current = camera_buttons_form_values(
+                camera_buttons_to_form(camera_buttons(hass) if hass else {})
+            )
+
+        fields: dict[Any, Any] = {}
+        for slot in range(1, MAX_CAMERA_BUTTONS + 1):
+            for key, selector in (
+                (f"camera_{slot}", _entity_selector(("camera",))),
+                (f"button_target_{slot}", _entity_selector(BUTTON_TARGET_DOMAINS)),
+                (f"button_label_{slot}", str),
+            ):
+                value = current.get(key)
+                if value:
+                    fields[
+                        vol.Optional(key, description={"suggested_value": value})
+                    ] = selector
+                else:
+                    fields[vol.Optional(key)] = selector
+
+        return self.async_show_form(
+            step_id="camera_buttons",
+            data_schema=vol.Schema(fields),
             errors=errors,
         )
 
@@ -486,6 +562,59 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
             },
             errors=errors,
         )
+
+
+def _entity_selector(domains: tuple[str, ...]) -> Any:
+    """Return an entity picker limited to the given domains."""
+
+    if ha_selector is None:
+        return str
+    return ha_selector.EntitySelector(
+        ha_selector.EntitySelectorConfig(domain=list(domains))
+    )
+
+
+def camera_buttons_to_form(pairings: dict[str, dict[str, str]]) -> dict[str, str]:
+    """Flatten stored pairings into numbered form fields."""
+
+    values: dict[str, str] = {}
+    for slot, (camera, pairing) in enumerate(pairings.items(), start=1):
+        if slot > MAX_CAMERA_BUTTONS:
+            break
+        values[f"camera_{slot}"] = camera
+        values[f"button_target_{slot}"] = pairing.get("entity_id", "")
+        if pairing.get("label"):
+            values[f"button_label_{slot}"] = pairing["label"]
+    return values
+
+
+def camera_buttons_form_values(values: dict[str, Any]) -> dict[str, str]:
+    return {key: str(value).strip() for key, value in values.items() if value}
+
+
+def camera_buttons_from_form(
+    user_input: dict[str, Any],
+) -> tuple[dict[str, dict[str, str]], str | None]:
+    """Turn numbered form fields into pairings, or return an error key."""
+
+    pairings: dict[str, dict[str, str]] = {}
+    for slot in range(1, MAX_CAMERA_BUTTONS + 1):
+        camera = str(user_input.get(f"camera_{slot}") or "").strip()
+        target = str(user_input.get(f"button_target_{slot}") or "").strip()
+        label = str(user_input.get(f"button_label_{slot}") or "").strip()
+        if not camera and not target:
+            continue
+        if not camera or not target:
+            return {}, "camera_button_incomplete"
+        if camera in pairings:
+            return {}, "camera_button_duplicate"
+        if len(label) > 40:
+            return {}, "camera_button_label_too_long"
+        pairing = {"entity_id": target}
+        if label:
+            pairing["label"] = label
+        pairings[camera] = pairing
+    return pairings, None
 
 
 def _select_dropdown(options: tuple[str, ...]) -> Any:

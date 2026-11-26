@@ -471,6 +471,52 @@ The integration registers a Home Assistant WebSocket command that a paired Andro
 
 Remote mode is not a HA TV PiP cloud service. It uses the user's Home Assistant external URL, including Nabu Casa URLs where available, and the integration remains `local_push`.
 
+## Door Buttons 🔓
+
+A camera popup can include a button that unlocks a door, opens a garage, or runs a
+script, so you can let someone in straight from the TV remote.
+
+**Set up once in the UI:** open any receiver's **Configure** page, tick **Set up door
+buttons for cameras**, and pair each camera with the lock, cover, script, or button
+it should control (an optional label replaces the default "Unlock …" / "Open …").
+Pairings are shared by all receivers. After that, every `show_camera` or
+`show_snapshot` popup for a paired camera shows its button automatically.
+
+On the TV:
+
+- the popup takes remote focus with the button highlighted;
+- the first OK press asks for confirmation, and a second press within 3 seconds runs it;
+- the popup closes after its duration, when you press Back, or shortly after the action succeeds.
+
+**Per-automation buttons:** pass `actions` to override the pairing (up to three
+buttons), or `actions: []` to show none:
+
+```yaml
+action: ha_tv_pip.show_camera
+target:
+  device_id: <receiver device>
+data:
+  camera_entity: camera.front_door
+  duration_seconds: 30
+  actions:
+    - label: Unlock Front Door
+      icon: unlock
+      action: lock.unlock
+      target:
+        entity_id: lock.front_door
+```
+
+**How it is secured:** the receiver never learns which service a button runs. Home
+Assistant sends a random one-time id for each button and keeps the real service call.
+The TV posts that id back to `/api/ha_tv_pip/action`, authenticated with its pairing
+token, and Home Assistant runs the stored call once. The ids expire shortly after the
+popup closes, after a single press, or when a newer popup replaces them. If you want
+extra checks (someone is at the door, notify your phone), pair the camera with a
+script that does them.
+
+Buttons need the receiver's "Display over other apps" permission. If it is not
+granted, the popup is shown without buttons.
+
 ## Known Limitations 🚧
 
 - Some Android TV devices reject native PiP for sideloaded apps; the receiver includes an overlay fallback when permission is granted.

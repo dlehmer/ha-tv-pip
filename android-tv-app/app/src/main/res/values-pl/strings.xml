@@ -141,4 +141,8 @@
     <string name="troubleshooting_discovery">Wykrywanie: trzymaj TV i Home Assistant w tej samej sieci i sprawdź, czy lokalny endpoint działa.</string>
     <string name="troubleshooting_remote">Odbiornik zdalny: sprawdź, czy Home Assistant zapisał zewnętrzny URL i token, potem użyj Synchronizuj konfigurację zdalną.</string>
     <string name="troubleshooting_launcher">Ukryty launcher: użyj Otwórz launcher w Home Assistant albo Ustawienia Androida &gt; Aplikacje &gt; HA TV PiP, aby ponownie otworzyć ten ekran.</string>
+    <string name="overlay_action_confirm">Naciśnij ponownie, aby potwierdzić</string>
+    <string name="overlay_action_working">Trwa wykonywanie…</string>
+    <string name="overlay_action_done">✓ Gotowe</string>
+    <string name="overlay_action_failed">⚠ Niepowodzenie — spróbuj ponownie</string>
 </resources>

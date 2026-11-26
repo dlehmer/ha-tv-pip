@@ -32,4 +32,5 @@ object ReceiverCapabilities {
             .put("receiverNameManagement", true)
             .put("localPairing", true)
             .put("remoteReceiverSettings", true)
+            .put("overlayActions", true)
 }

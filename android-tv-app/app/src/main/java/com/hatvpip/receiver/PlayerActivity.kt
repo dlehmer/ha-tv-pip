@@ -304,6 +304,7 @@ class PlayerActivity : ComponentActivity() {
                         command.style.width?.let { putExtra(EXTRA_WIDTH, it) }
                         command.style.height?.let { putExtra(EXTRA_HEIGHT, it) }
                         command.durationSeconds?.let { putExtra(EXTRA_DURATION_SECONDS, it) }
+                        putActionExtras(command)
                     }
             )
             updateRuntimeState(mode = ReceiverPlaybackMode.Overlay)
@@ -389,6 +390,8 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_HEIGHT = "com.hatvpip.receiver.extra.HEIGHT"
         const val EXTRA_DURATION_SECONDS = "com.hatvpip.receiver.extra.DURATION_SECONDS"
         const val EXTRA_ENTER_PIP = "com.hatvpip.receiver.extra.ENTER_PIP"
+        const val EXTRA_ACTIONS_JSON = "com.hatvpip.receiver.extra.ACTIONS_JSON"
+        const val EXTRA_ACTION_CALLBACK_URL = "com.hatvpip.receiver.extra.ACTION_CALLBACK_URL"
         const val TEST_STREAM_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
         private const val REMOTE_PIP_DELAY_MS = 750L
 
@@ -414,6 +417,7 @@ class PlayerActivity : ComponentActivity() {
                 command.style.height?.let { putExtra(EXTRA_HEIGHT, it) }
                 command.durationSeconds?.let { putExtra(EXTRA_DURATION_SECONDS, it) }
                 putExtra(EXTRA_ENTER_PIP, command.enterPip)
+                putActionExtras(command)
             }
     }
 }
@@ -465,8 +469,18 @@ private fun Intent.toShowCommand(): ShowCommand =
         } else {
             null
         },
-        enterPip = getBooleanExtra(PlayerActivity.EXTRA_ENTER_PIP, false)
+        enterPip = getBooleanExtra(PlayerActivity.EXTRA_ENTER_PIP, false),
+        actions = OverlayAction.listFromJsonString(getStringExtra(PlayerActivity.EXTRA_ACTIONS_JSON)),
+        actionCallbackUrl = getStringExtra(PlayerActivity.EXTRA_ACTION_CALLBACK_URL)
     )
+
+internal fun Intent.putActionExtras(command: ShowCommand): Intent {
+    if (command.hasActions) {
+        putExtra(PlayerActivity.EXTRA_ACTIONS_JSON, OverlayAction.listToJsonString(command.actions))
+        putExtra(PlayerActivity.EXTRA_ACTION_CALLBACK_URL, command.actionCallbackUrl)
+    }
+    return this
+}
 
 private val ShowCommand.playerVolume: Float
     get() = if (muted) 0f else 1f

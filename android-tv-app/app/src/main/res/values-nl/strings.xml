@@ -141,4 +141,8 @@
     <string name="troubleshooting_discovery">Ontdekking: houd de tv en Home Assistant op hetzelfde netwerk en controleer of het lokale endpoint actief is.</string>
     <string name="troubleshooting_remote">Remote receiver: controleer of Home Assistant de externe URL en token heeft opgeslagen en gebruik daarna Remote Config synchroniseren.</string>
     <string name="troubleshooting_launcher">Verborgen launcher: gebruik Home Assistant Launcher openen of Android-instellingen &gt; Apps &gt; HA TV PiP om dit scherm opnieuw te openen.</string>
+    <string name="overlay_action_confirm">Druk nogmaals om te bevestigen</string>
+    <string name="overlay_action_working">Bezig…</string>
+    <string name="overlay_action_done">✓ Klaar</string>
+    <string name="overlay_action_failed">⚠ Mislukt — probeer opnieuw</string>
 </resources>

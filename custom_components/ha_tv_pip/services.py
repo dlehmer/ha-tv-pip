@@ -10,6 +10,14 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlencode, urljoin, urlparse
 
+from .actions import (
+    ACTION_CALLBACK_PATH,
+    ATTR_ACTIONS,
+    DEFAULT_ACTION_TTL_SECONDS,
+    actions_schema,
+    default_action_spec,
+    pending_action_store,
+)
 from .client import (
     ReceiverCapabilities,
     ReceiverClientError,
@@ -133,6 +141,9 @@ ERROR_MESSAGES = {
     ),
     "invalid_notification_size": (
         "Notification text sizes are outside the supported range."
+    ),
+    "invalid_overlay_action": (
+        "An overlay button uses an action Home Assistant does not know."
     ),
     "invalid_overlay_size": "Overlay width or height is outside the supported range.",
     "invalid_position": (
@@ -318,9 +329,14 @@ async def async_register_services(hass: Any) -> None:
         ),
     }
 
+    overlay_actions_field = {
+        vol.Optional(ATTR_ACTIONS): actions_schema(vol, cv),
+    }
+
     camera_schema = vol.Schema(
         {
             **base_schema,
+            **overlay_actions_field,
             vol.Optional(ATTR_SNAPSHOT_CAMERA_ENTITY): cv.entity_id,
             vol.Optional(ATTR_SNAPSHOT_FALLBACK): bool,
             vol.Optional(ATTR_RESTREAM_PROVIDER): str,
@@ -407,6 +423,7 @@ async def async_register_services(hass: Any) -> None:
     snapshot_schema = vol.Schema(
         {
             **base_schema,
+            **overlay_actions_field,
             vol.Optional(ATTR_DURATION_SECONDS): vol.All(
                 vol.Coerce(int),
                 vol.Range(min=1, max=3600),
@@ -416,6 +433,7 @@ async def async_register_services(hass: Any) -> None:
     notification_schema = vol.Schema(
         {
             **target_schema,
+            **overlay_actions_field,
             vol.Optional(ATTR_TITLE, default=DEFAULT_NOTIFICATION_TITLE): str,
             vol.Optional(ATTR_MESSAGE): str,
             vol.Optional(ATTR_DURATION_SECONDS): vol.All(
@@ -686,6 +704,9 @@ async def async_handle_show_camera(hass: Any, call: Any) -> None:
     )
 
     try:
+        command = _with_overlay_actions(
+            hass, call, receiver, command, prefer_external=prefer_external
+        )
         transport = await _async_send_receiver_command(
             receiver,
             remote,
@@ -793,6 +814,9 @@ async def async_handle_show_snapshot(hass: Any, call: Any) -> None:
             stream_type=STREAM_TYPE_SNAPSHOT,
             **_presentation_payload(request),
         )
+        command = _with_overlay_actions(
+            hass, call, receiver, command, prefer_external=prefer_external
+        )
         transport = await _async_send_receiver_command(
             receiver,
             remote,
@@ -881,6 +905,9 @@ async def async_handle_show_notification(hass: Any, call: Any) -> None:
             background_color=request.background_color,
             width=request.width,
             height=request.height,
+        )
+        command = _with_overlay_actions(
+            hass, call, receiver, command, prefer_external=prefer_external
         )
         transport = await _async_send_receiver_command(
             receiver,
@@ -1465,6 +1492,55 @@ async def _async_send_receiver_command(
         command=command,
     )
     return "local"
+
+
+def _with_overlay_actions(
+    hass: Any,
+    call: Any,
+    receiver: ReceiverEntry,
+    command: ShowCameraCommand,
+    *,
+    prefer_external: bool,
+) -> ShowCameraCommand:
+    """Attach one-time overlay action buttons to a show command."""
+
+    store = pending_action_store(hass)
+    if ATTR_ACTIONS in call.data:
+        # Explicit buttons from the automation win; `actions: []` hides buttons.
+        specs = list(call.data.get(ATTR_ACTIONS) or [])
+    else:
+        paired = default_action_spec(hass, call.data.get(ATTR_CAMERA_ENTITY))
+        specs = [paired] if paired else []
+    if not specs:
+        # A new popup without buttons invalidates buttons from an earlier popup.
+        store.clear_device(receiver.device_id)
+        return command
+
+    for spec in specs:
+        domain, _, service = spec["action"].partition(".")
+        services = getattr(hass, "services", None)
+        if services is not None and hasattr(services, "has_service"):
+            if not services.has_service(domain, service):
+                raise ServiceValidationError(
+                    "invalid_overlay_action",
+                    f"Unknown action {spec['action']} for button '{spec['label']}'",
+                )
+
+    wire_actions = store.replace_for_device(
+        receiver.device_id,
+        specs,
+        ttl_seconds=command.duration_seconds or DEFAULT_ACTION_TTL_SECONDS,
+    )
+    callback_url = _absolute_stream_url(
+        hass,
+        ACTION_CALLBACK_PATH,
+        prefer_external=prefer_external,
+    )
+    return replace(
+        command,
+        actions=tuple(wire_actions),
+        action_callback_url=callback_url,
+    )
 
 
 async def _async_close_receiver_command(

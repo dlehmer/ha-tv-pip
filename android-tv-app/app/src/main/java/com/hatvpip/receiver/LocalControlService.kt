@@ -104,7 +104,13 @@ class LocalControlService : Service() {
             .build()
 
     private fun showPlayer(command: ShowCommand) {
-        if (command.startsDirectlyInOverlay()) {
+        // Action buttons need a focusable window we control, which native PiP cannot provide,
+        // so popups with actions always use the overlay when the permission is granted.
+        val overlayForActions = command.hasActions && canDrawOverlays()
+        if (command.hasActions && !overlayForActions) {
+            AppLog.error("Popup has action buttons but overlay permission is not granted; buttons hidden")
+        }
+        if (command.startsDirectlyInOverlay() || overlayForActions) {
             startService(
                 Intent(this, OverlayPlayerService::class.java)
                     .setAction(OverlayPlayerService.ACTION_SHOW)
@@ -130,6 +136,7 @@ class LocalControlService : Service() {
                         command.durationSeconds?.let {
                             putExtra(PlayerActivity.EXTRA_DURATION_SECONDS, it)
                         }
+                        putActionExtras(command)
                     }
             )
             return
@@ -146,6 +153,9 @@ class LocalControlService : Service() {
 
         startActivity(intent)
     }
+
+    private fun canDrawOverlays(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || android.provider.Settings.canDrawOverlays(this)
 
     private fun closePlayer() {
         val playback = ReceiverRuntimeState.snapshot()

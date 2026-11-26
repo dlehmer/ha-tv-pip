@@ -1,0 +1,56 @@
+name: Build APK (door buttons) 🔓
+
+on:
+  push:
+    branches:
+      - overlay-buttons
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Test and build debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-36.1" "build-tools;37.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Android unit tests
+        working-directory: android-tv-app
+        run: ./gradlew testDebugUnitTest
+
+      - name: Build debug APK
+        working-directory: android-tv-app
+        run: ./gradlew assembleDebug
+
+      - name: Package Home Assistant integration
+        run: |
+          mkdir -p dist
+          cp android-tv-app/app/build/outputs/apk/debug/app-debug.apk dist/ha-tv-pip-door-buttons-debug.apk
+          (cd custom_components && zip -qr ../dist/ha_tv_pip-door-buttons.zip ha_tv_pip -x '*__pycache__*')
+
+      - name: Upload APK and integration
+        uses: actions/upload-artifact@v4
+        with:
+          name: ha-tv-pip-door-buttons
+          path: dist/

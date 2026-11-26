@@ -22,8 +22,13 @@ data class ShowCommand(
     val showNotification: Boolean,
     val message: String?,
     val style: NotificationStyle,
-    val muted: Boolean = true
+    val muted: Boolean = true,
+    val actions: List<OverlayAction> = emptyList(),
+    val actionCallbackUrl: String? = null
 ) {
+    val hasActions: Boolean
+        get() = actions.isNotEmpty() && actionCallbackUrl != null
+
     companion object {
         fun testVideo(title: String = "Test Video"): ShowCommand =
             ShowCommand(
@@ -106,13 +111,76 @@ data class ShowCommand(
                     ),
                     message = json.optString("message").trim().ifBlank { null },
                     style = NotificationStyle.fromJson(json),
-                    muted = json.optBoolean("muted", true)
+                    muted = json.optBoolean("muted", true),
+                    actions = OverlayAction.listFromJson(json),
+                    actionCallbackUrl = json.optString("actionCallbackUrl").trim().ifBlank { null }
+                        ?.also {
+                            require(it.startsWith("http://") || it.startsWith("https://")) {
+                                "`actionCallbackUrl` must be an HTTP or HTTPS URL"
+                            }
+                        }
                 )
             }.recoverCatching { error ->
                 if (error is JSONException) {
                     throw IllegalArgumentException("Request body must be valid JSON", error)
                 }
                 throw error
+            }
+    }
+}
+
+/**
+ * A button shown under the overlay media. The receiver never decides what an action does:
+ * it only sends [id] (a one-time token minted by Home Assistant) back to
+ * `actionCallbackUrl`, and Home Assistant runs the service call it stored for that id.
+ */
+data class OverlayAction(
+    val id: String,
+    val label: String,
+    val icon: String? = null,
+    val confirm: Boolean = true,
+    val confirmLabel: String? = null
+) {
+    fun toJson(): JSONObject =
+        JSONObject()
+            .put("id", id)
+            .put("label", label)
+            .put("icon", icon)
+            .put("confirm", confirm)
+            .put("confirmLabel", confirmLabel)
+
+    companion object {
+        const val MAX_ACTIONS = 3
+
+        fun listFromJson(json: JSONObject): List<OverlayAction> {
+            val array = json.optJSONArray("actions") ?: return emptyList()
+            require(array.length() <= MAX_ACTIONS) { "At most $MAX_ACTIONS `actions` are supported" }
+            return (0 until array.length()).map { index ->
+                val item = array.getJSONObject(index)
+                val id = item.optString("id").trim()
+                val label = item.optString("label").trim()
+                require(id.isNotEmpty()) { "`actions[$index].id` is required" }
+                require(label.isNotEmpty()) { "`actions[$index].label` is required" }
+                OverlayAction(
+                    id = id,
+                    label = label.take(40),
+                    icon = item.optString("icon").trim().ifBlank { null },
+                    confirm = item.optBoolean("confirm", true),
+                    confirmLabel = item.optString("confirmLabel").trim().ifBlank { null }?.take(40)
+                )
+            }
+        }
+
+        fun listToJsonString(actions: List<OverlayAction>): String =
+            org.json.JSONArray().also { array -> actions.forEach { array.put(it.toJson()) } }
+                .toString()
+
+        fun listFromJsonString(value: String?): List<OverlayAction> =
+            if (value.isNullOrBlank()) {
+                emptyList()
+            } else {
+                runCatching { listFromJson(JSONObject().put("actions", org.json.JSONArray(value))) }
+                    .getOrDefault(emptyList())
             }
     }
 }

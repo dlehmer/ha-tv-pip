@@ -3,6 +3,18 @@ show_camera:
     device:
       integration: ha_tv_pip
   fields:
+    actions:
+      required: false
+      selector:
+        object:
+      name: Overlay buttons
+      description: Up to three buttons shown under the popup. Leave this out to use the door button paired with this camera in the receiver settings, or set it to an empty list to show no buttons. The popup takes remote focus, each button needs a second press to confirm (unless confirm is false), and Home Assistant runs the button's action only if it is pressed before the popup expires. Requires overlay permission on the receiver.
+      example: |
+        - label: Unlock Front Door
+          icon: unlock
+          action: lock.unlock
+          target:
+            entity_id: lock.front_door_lock
     camera_entity:
       required: true
       selector:
@@ -181,6 +193,18 @@ show_snapshot:
     device:
       integration: ha_tv_pip
   fields:
+    actions:
+      required: false
+      selector:
+        object:
+      name: Overlay buttons
+      description: Up to three buttons shown under the popup. Leave this out to use the door button paired with this camera in the receiver settings, or set it to an empty list to show no buttons. The popup takes remote focus, each button needs a second press to confirm (unless confirm is false), and Home Assistant runs the button's action only if it is pressed before the popup expires. Requires overlay permission on the receiver.
+      example: |
+        - label: Unlock Front Door
+          icon: unlock
+          action: lock.unlock
+          target:
+            entity_id: lock.front_door_lock
     camera_entity:
       required: true
       selector:
@@ -306,6 +330,18 @@ show_notification:
     device:
       integration: ha_tv_pip
   fields:
+    actions:
+      required: false
+      selector:
+        object:
+      name: Overlay buttons
+      description: Up to three buttons shown under the popup. Leave this out to use the door button paired with this camera in the receiver settings, or set it to an empty list to show no buttons. The popup takes remote focus, each button needs a second press to confirm (unless confirm is false), and Home Assistant runs the button's action only if it is pressed before the popup expires. Requires overlay permission on the receiver.
+      example: |
+        - label: Unlock Front Door
+          icon: unlock
+          action: lock.unlock
+          target:
+            entity_id: lock.front_door_lock
     title:
       default: Home Assistant
       selector:

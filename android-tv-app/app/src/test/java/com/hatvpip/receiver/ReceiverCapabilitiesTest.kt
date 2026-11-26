@@ -27,5 +27,6 @@ class ReceiverCapabilitiesTest {
         assertTrue(capabilities.getBoolean("receiverNameManagement"))
         assertTrue(capabilities.getBoolean("localPairing"))
         assertTrue(capabilities.getBoolean("remoteReceiverSettings"))
+        assertTrue(capabilities.getBoolean("overlayActions"))
     }
 }

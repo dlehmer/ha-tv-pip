@@ -141,4 +141,8 @@
     <string name="troubleshooting_discovery">Rilevamento: tieni TV e Home Assistant sulla stessa rete e verifica che l’endpoint locale sia attivo.</string>
     <string name="troubleshooting_remote">Ricevitore remoto: controlla che Home Assistant abbia salvato URL esterno e token, poi usa Sincronizza configurazione remota.</string>
     <string name="troubleshooting_launcher">Launcher nascosto: usa Apri launcher in Home Assistant o Impostazioni Android &gt; App &gt; HA TV PiP per riaprire questa schermata.</string>
+    <string name="overlay_action_confirm">Premi di nuovo per confermare</string>
+    <string name="overlay_action_working">In corso…</string>
+    <string name="overlay_action_done">✓ Fatto</string>
+    <string name="overlay_action_failed">⚠ Non riuscito, riprova</string>
 </resources>

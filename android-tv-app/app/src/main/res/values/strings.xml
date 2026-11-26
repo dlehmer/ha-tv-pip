@@ -146,6 +146,10 @@
     <string name="error_mjpeg_frame_too_large">MJPEG frame exceeded %1$d bytes</string>
     <string name="error_unknown_snapshot">unknown snapshot error</string>
     <string name="snapshot_unavailable">Snapshot unavailable</string>
+    <string name="overlay_action_confirm">Press again to confirm</string>
+    <string name="overlay_action_working">Working…</string>
+    <string name="overlay_action_done">✓ Done</string>
+    <string name="overlay_action_failed">⚠ Failed — try again</string>
     <string name="error_unsupported_video_stream">Unsupported video stream\nTry a compatible substream, H.264, or stream_type: mjpeg</string>
     <string name="error_playback_error_code">Playback error\n%1$s</string>
 

@@ -6,11 +6,13 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -27,7 +29,9 @@ import androidx.media3.ui.PlayerView
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.net.HttpURLConnection
 import java.net.URL
+import org.json.JSONObject
 
 class OverlayPlayerService : Service() {
     private lateinit var windowManager: WindowManager
@@ -46,6 +50,10 @@ class OverlayPlayerService : Service() {
     private var style: NotificationStyle = NotificationStyle()
     private var streamType: StreamType = StreamType.Hls
     private var durationSeconds: Int? = null
+    private var actions: List<OverlayAction> = emptyList()
+    private var actionCallbackUrl: String? = null
+    private var actionInFlight: Boolean = false
+    private val actionButtons = mutableListOf<TextView>()
     @Volatile private var mjpegRunning: Boolean = false
     private var mjpegThread: Thread? = null
     private val autoCloseHandler = Handler(Looper.getMainLooper())
@@ -105,6 +113,15 @@ class OverlayPlayerService : Service() {
                 durationSeconds = intent?.takeIf {
                     it.hasExtra(PlayerActivity.EXTRA_DURATION_SECONDS)
                 }?.getIntExtra(PlayerActivity.EXTRA_DURATION_SECONDS, 0)?.takeIf { it > 0 }
+                actionCallbackUrl = intent?.getStringExtra(PlayerActivity.EXTRA_ACTION_CALLBACK_URL)
+                actions = if (actionCallbackUrl != null) {
+                    OverlayAction.listFromJsonString(
+                        intent?.getStringExtra(PlayerActivity.EXTRA_ACTIONS_JSON)
+                    )
+                } else {
+                    emptyList()
+                }
+                actionInFlight = false
                 showOverlay()
             }
         }
@@ -124,7 +141,12 @@ class OverlayPlayerService : Service() {
             removeOverlay()
         }
 
-        if (streamType != StreamType.Notification && showNotification && !style.textOverlay) {
+        if (
+            streamType != StreamType.Notification &&
+            showNotification &&
+            !style.textOverlay &&
+            actions.isEmpty()
+        ) {
             showMediaWithFooterOverlay()
             return
         }
@@ -163,8 +185,16 @@ class OverlayPlayerService : Service() {
                 addNotificationContent(root, fillHeight = false)
             }
         }
+        if (actions.isNotEmpty()) {
+            root.addView(buildActionBar())
+        }
 
         val params = overlayLayoutParams(overlayHeight(), OVERLAY_MARGIN_PX)
+        if (actions.isNotEmpty()) {
+            // Take D-pad focus so the remote drives the buttons. The window gives focus back
+            // to the app underneath as soon as it is removed (Back, timeout, or after an action).
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        }
         if (streamType == StreamType.Notification) {
             applyBackgroundBlur(params)
         }
@@ -172,6 +202,7 @@ class OverlayPlayerService : Service() {
         runCatching {
             windowManager.addView(root, params)
             overlayView = root
+            actionButtons.firstOrNull()?.let { button -> button.post { button.requestFocus() } }
             updatePlaybackState(
                 status = if (streamType == StreamType.Notification) PlaybackStatus.Ready else PlaybackStatus.Buffering,
                 isPlaying = false,
@@ -310,6 +341,158 @@ class OverlayPlayerService : Service() {
                 Gravity.BOTTOM
             )
         }
+
+    private fun buildActionBar(): LinearLayout {
+        actionButtons.clear()
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX)
+            background = glassTextBackground()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        actions.forEachIndexed { index, action ->
+            val button = TextView(this).apply {
+                text = action.displayLabel()
+                setTextColor(Color.WHITE)
+                textSize = ACTION_TEXT_SIZE_SP
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                maxLines = 1
+                setPadding(ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX, ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX)
+                background = actionButtonBackground()
+                isFocusable = true
+                isFocusableInTouchMode = true
+                isClickable = true
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (index > 0) marginStart = ACTION_BUTTON_GAP_PX
+                }
+                setOnKeyListener { _, keyCode, event ->
+                    if (keyCode == KeyEvent.KEYCODE_BACK) {
+                        if (event.action == KeyEvent.ACTION_UP) {
+                            AppLog.playbackStop(reason = "overlay_back_pressed")
+                            stopSelf()
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                setOnFocusChangeListener { view, hasFocus ->
+                    view.animate().scaleX(if (hasFocus) 1.05f else 1f)
+                        .scaleY(if (hasFocus) 1.05f else 1f)
+                        .setDuration(120)
+                        .start()
+                }
+            }
+            button.setOnClickListener { onActionPressed(button, action) }
+            actionButtons += button
+            bar.addView(button)
+        }
+        return bar
+    }
+
+    private var armedActionId: String? = null
+
+    private fun onActionPressed(button: TextView, action: OverlayAction) {
+        if (actionInFlight) return
+        if (action.confirm && armedActionId != action.id) {
+            armedActionId = action.id
+            button.text = action.confirmLabel ?: getString(R.string.overlay_action_confirm)
+            mainHandler.postDelayed({
+                if (armedActionId == action.id && !actionInFlight) {
+                    armedActionId = null
+                    button.text = action.displayLabel()
+                }
+            }, ACTION_CONFIRM_WINDOW_MS)
+            return
+        }
+        armedActionId = null
+        runAction(button, action)
+    }
+
+    private fun runAction(button: TextView, action: OverlayAction) {
+        val callbackUrl = actionCallbackUrl ?: return
+        actionInFlight = true
+        // Don't let the popup time out underneath a request that is still running.
+        autoCloseHandler.removeCallbacksAndMessages(null)
+        button.text = getString(R.string.overlay_action_working)
+        Thread {
+            val result = runCatching { postAction(callbackUrl, action.id) }
+            mainHandler.post {
+                actionInFlight = false
+                if (overlayView == null) return@post
+                result.onSuccess {
+                    AppLog.lifecycleEvent("overlay_action_succeeded", action.label)
+                    button.text = getString(R.string.overlay_action_done)
+                    autoCloseHandler.postDelayed({ stopSelf() }, ACTION_SUCCESS_CLOSE_DELAY_MS)
+                }.onFailure { error ->
+                    AppLog.error("Overlay action failed: ${action.label}", error)
+                    button.text = getString(R.string.overlay_action_failed)
+                    mainHandler.postDelayed({
+                        if (overlayView != null && !actionInFlight) button.text = action.displayLabel()
+                    }, ACTION_FAILED_RESET_MS)
+                    autoCloseHandler.postDelayed({ stopSelf() }, ACTION_FAILED_CLOSE_DELAY_MS)
+                }
+            }
+        }.start()
+    }
+
+    private fun postAction(callbackUrl: String, actionId: String) {
+        val token = PairingState.pairedToken(applicationContext)
+            ?: throw IOException("Receiver is not paired")
+        val body = JSONObject()
+            .put("deviceId", ReceiverDeviceInfo.stableDeviceId(applicationContext))
+            .put("actionId", actionId)
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+        val connection = (URL(callbackUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = ACTION_TIMEOUT_MS
+            readTimeout = ACTION_TIMEOUT_MS
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Authorization", "Bearer $token")
+        }
+        try {
+            connection.outputStream.use { it.write(body) }
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                val detail = runCatching {
+                    connection.errorStream?.bufferedReader()?.use { it.readText() }
+                        ?.let { JSONObject(it).optString("error") }
+                }.getOrNull()
+                throw IOException("Home Assistant returned HTTP $status${detail?.let { ": $it" } ?: ""}")
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun actionButtonBackground(): StateListDrawable =
+        StateListDrawable().apply {
+            addState(
+                intArrayOf(android.R.attr.state_focused),
+                GradientDrawable().apply {
+                    setColor(ACTION_FOCUSED_COLOR)
+                    cornerRadius = ACTION_BUTTON_CORNER_RADIUS_PX
+                    setStroke(ACTION_FOCUSED_STROKE_PX, Color.WHITE)
+                }
+            )
+            addState(
+                intArrayOf(),
+                GradientDrawable().apply {
+                    setColor(ACTION_IDLE_COLOR)
+                    cornerRadius = ACTION_BUTTON_CORNER_RADIUS_PX
+                }
+            )
+        }
+
+    private fun OverlayAction.displayLabel(): String =
+        iconGlyph(icon)?.let { "$it  $label" } ?: label
 
     private fun addNotificationContent(root: LinearLayout, fillHeight: Boolean) {
         root.addView(
@@ -660,6 +843,9 @@ class OverlayPlayerService : Service() {
     }
 
     private fun removeOverlay() {
+        mainHandler.removeCallbacksAndMessages(null)
+        actionButtons.clear()
+        armedActionId = null
         mjpegRunning = false
         mjpegThread?.interrupt()
         mjpegThread = null
@@ -721,14 +907,14 @@ class OverlayPlayerService : Service() {
     private fun overlayHeight(): Int =
         style.height ?: if (streamType == StreamType.Notification) {
             WindowManager.LayoutParams.WRAP_CONTENT
-        } else if (showNotification) {
+        } else if (showNotification || actions.isNotEmpty()) {
             WindowManager.LayoutParams.WRAP_CONTENT
         } else {
             OVERLAY_HEIGHT_PX
         }
 
     private fun mediaLayoutParams(): LinearLayout.LayoutParams =
-        if (showNotification && style.height == null) {
+        if ((showNotification || actions.isNotEmpty()) && style.height == null) {
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 OVERLAY_HEIGHT_PX
@@ -764,8 +950,34 @@ class OverlayPlayerService : Service() {
         private const val JPEG_START_MARKER = 0xD8
         private const val JPEG_END_MARKER = 0xD9
         private val DEFAULT_BACKGROUND_COLOR_INT = 0xB30F0E0E.toInt()
+        private const val ACTION_BAR_PADDING_PX = 16
+        private const val ACTION_BUTTON_GAP_PX = 16
+        private const val ACTION_BUTTON_H_PADDING_PX = 20
+        private const val ACTION_BUTTON_V_PADDING_PX = 14
+        private const val ACTION_BUTTON_CORNER_RADIUS_PX = 28f
+        private const val ACTION_FOCUSED_STROKE_PX = 3
+        private const val ACTION_TEXT_SIZE_SP = 18f
+        private const val ACTION_IDLE_COLOR = 0x33FFFFFF
+        private val ACTION_FOCUSED_COLOR = 0xFF1E88E5.toInt()
+        private const val ACTION_CONFIRM_WINDOW_MS = 3_000L
+        private const val ACTION_SUCCESS_CLOSE_DELAY_MS = 1_500L
+        private const val ACTION_FAILED_RESET_MS = 3_000L
+        private const val ACTION_FAILED_CLOSE_DELAY_MS = 10_000L
+        private const val ACTION_TIMEOUT_MS = 30_000
     }
 }
+
+internal fun iconGlyph(icon: String?): String? =
+    when (icon?.trim()?.lowercase()?.removePrefix("mdi:")) {
+        null, "" -> null
+        "unlock", "lock-open", "lock-open-variant" -> "\uD83D\uDD13"
+        "lock" -> "\uD83D\uDD12"
+        "garage", "garage-open", "garage-variant", "car" -> "\uD83D\uDE97"
+        "door", "door-open" -> "\uD83D\uDEAA"
+        "light", "lightbulb" -> "\uD83D\uDCA1"
+        "bell", "doorbell" -> "\uD83D\uDD14"
+        else -> icon?.takeIf { it.codePointCount(0, it.length) <= 2 }
+    }
 
 internal fun overlayGravityFor(position: NotificationPosition): Int =
     when (position) {
