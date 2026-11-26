@@ -125,7 +125,7 @@ class PendingActionStore:
 def pending_action_store(hass: Any) -> PendingActionStore:
     domain_data = hass.data.setdefault(DOMAIN, {})
     store = domain_data.get(DATA_PENDING_ACTIONS)
-    if store is None:
+    if not isinstance(store, PendingActionStore):
         store = PendingActionStore()
         domain_data[DATA_PENDING_ACTIONS] = store
     return store
@@ -314,7 +314,7 @@ def _build_action_view() -> Any:
 
     from .remote import _token_matches_config_entry
 
-    class HaTvPipActionView(HomeAssistantView):
+    class HaTvPipActionView(HomeAssistantView):  # type: ignore[misc]
         """Receives button presses from paired receivers."""
 
         url = ACTION_CALLBACK_PATH

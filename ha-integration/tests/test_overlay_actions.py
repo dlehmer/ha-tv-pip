@@ -92,7 +92,9 @@ class _States:
 
 
 class _Hass:
-    def __init__(self, pairings: dict, states: dict[str, _State]) -> None:
+    def __init__(
+        self, pairings: dict[str, dict[str, str]], states: dict[str, _State]
+    ) -> None:
         from custom_components.ha_tv_pip_plus.actions import DATA_CAMERA_BUTTONS
         from custom_components.ha_tv_pip_plus.const import DOMAIN
 
