@@ -14,6 +14,22 @@ HA TV PiP is a local-first Home Assistant companion project for showing short-li
 | --- | --- | --- |
 | ![HA TV PiP receiver dashboard on Android TV](docs/assets/screenshots/android-tv-dashboard.png) | ![HA TV PiP camera popup over the Google TV home screen](docs/assets/screenshots/android-tv-homepage-camera-popup.jpg) | ![HA TV PiP camera notification over the Google TV home screen](docs/assets/screenshots/android-tv-homepage-camera-notification.jpg) |
 
+## Door Buttons 🔓
+
+Camera popups can show a button that unlocks a door, opens a garage, or runs a script,
+pressed straight from the TV remote:
+
+- Pair cameras with a lock, cover, script, or button once, in any receiver's
+  **Configure** page (**Set up door buttons for cameras**). Pairings apply to every TV.
+- The popup takes remote focus, the button needs two presses to confirm, and the popup
+  closes after its duration, on Back, or after the action succeeds.
+- The TV only ever sends back a one-time id, authenticated with its pairing token;
+  Home Assistant runs the stored action once.
+
+Automations can also pass their own `actions` (or `actions: []` for none). See
+[Door Buttons in the integration README](custom_components/ha_tv_pip/README.md#door-buttons-)
+for the full setup and a YAML example.
+
 ## Install HA TV PiP 🚀
 
 HA TV PiP needs two installed parts:
