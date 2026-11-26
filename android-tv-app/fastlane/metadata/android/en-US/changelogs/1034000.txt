@@ -1,0 +1,3 @@
+- Adding a TV with "Install the app" now pairs automatically over ADB; no code to type 🔑
+- Only the ADB shell can start this pairing, so other apps on the TV can't 🔒
+- Falls back to the on-screen code if automatic pairing isn't possible ↩️

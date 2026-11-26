@@ -15,7 +15,12 @@ from .actions import (
     async_save_camera_buttons,
     camera_buttons,
 )
-from .adb_setup import AdbSetupError, async_install_app
+from .adb_setup import (
+    AdbSetupError,
+    async_install_app,
+    async_prepare_adb_pairing,
+    new_pairing_code,
+)
 from .client import (
     ReceiverClientError,
     async_confirm_pairing,
@@ -150,6 +155,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             else:
                 await _async_wait_for_receiver(receiver.host, receiver.port)
                 self._install_receiver = None
+                token = await _async_pair_over_adb(self.hass, receiver)
+                if token is not None:
+                    return _create_receiver_entry(
+                        self,
+                        replace(receiver, pairing="paired"),
+                        token=token,
+                    )
+                # Automatic pairing failed: fall back to the code on the TV.
                 self._pairing_receiver = receiver
                 return await self.async_step_pair()
 
@@ -853,6 +866,35 @@ def _receiver_from_zeroconf(discovery_info: ZeroconfDiscoveryInfo) -> ReceiverDi
         port=discovery_info.port,
         properties=dict(discovery_info.properties),
     )
+
+
+async def _async_pair_over_adb(hass: Any, receiver: ReceiverDiscovery) -> str | None:
+    """Pair without a code on screen: hand the TV a code over ADB, then confirm.
+
+    Returns the pairing token, or None when the TV or app can't do it (for
+    example an older app), so the caller can fall back to manual pairing.
+    """
+
+    code = new_pairing_code()
+    try:
+        await async_prepare_adb_pairing(
+            hass,
+            receiver.host,
+            code=code,
+            client_id=PAIRING_CLIENT_ID,
+            client_name=PAIRING_CLIENT_NAME,
+        )
+        result = await async_confirm_pairing(
+            receiver.host,
+            receiver.port,
+            client_id=PAIRING_CLIENT_ID,
+            client_name=PAIRING_CLIENT_NAME,
+            code=code,
+        )
+    except (AdbSetupError, ReceiverClientError) as error:
+        _LOGGER.info("Automatic pairing over ADB unavailable: %s", error)
+        return None
+    return str(result.token)
 
 
 async def _async_wait_for_receiver(

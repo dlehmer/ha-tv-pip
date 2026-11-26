@@ -82,7 +82,8 @@ object PairingState {
     fun startPairing(
         context: Context,
         request: PairingStartRequest,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        presetCode: String? = null
     ): Result<PairingSnapshot> {
         val current = snapshot(context, nowMillis)
         if (current.state == PairingStatus.Paired && !request.replaceExisting) {
@@ -93,7 +94,7 @@ object PairingState {
             clientId = request.clientId,
             clientName = request.clientName,
             replaceExisting = request.replaceExisting,
-            code = generateCode(),
+            code = presetCode ?: generateCode(),
             expiresAtMillis = nowMillis + PAIRING_CODE_TTL_MS
         )
         return Result.success(snapshot(context, nowMillis))
@@ -157,6 +158,10 @@ object PairingState {
             .remove(KEY_CLIENT_NAME)
             .apply()
     }
+
+    /** Six digits, as generated codes are; used to validate ADB-provided codes. */
+    fun isValidCode(code: String): Boolean =
+        code.length == 6 && code.all { it in '0'..'9' }
 
     private fun generateCode(): String =
         (100_000 + random.nextInt(900_000)).toString()

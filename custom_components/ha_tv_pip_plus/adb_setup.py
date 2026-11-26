@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
+import shlex
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,6 +29,8 @@ APK_CACHE_FILENAME = f"{DOMAIN}_app.apk"
 AUTH_TIMEOUT_S = 45.0
 CONNECT_TIMEOUT_S = 9.0
 
+ADB_PAIR_ACTION = "com.dlehmer.hatvpipplus.action.ADB_PAIR"
+ADB_PAIR_RECEIVER = f"{APP_PACKAGE}/com.hatvpip.receiver.AdbPairingReceiver"
 GRANT_OVERLAY_COMMAND = f"appops set {APP_PACKAGE} SYSTEM_ALERT_WINDOW allow"
 CHECK_OVERLAY_COMMAND = f"appops get {APP_PACKAGE} SYSTEM_ALERT_WINDOW"
 
@@ -56,6 +60,7 @@ ERROR_HINTS = {
     "install_failed": "The TV refused to install the app.",
     "grant_failed": "The TV did not accept the overlay permission.",
     "adb_failed": "The ADB command failed.",
+    "pairing_rejected": "The TV app did not accept automatic pairing.",
 }
 
 
@@ -132,6 +137,56 @@ async def async_install_app(hass: Any, host: str) -> InstallResult:
     return InstallResult(
         apk_name=apk_name, release=release, overlay_granted=overlay_granted
     )
+
+
+def new_pairing_code() -> str:
+    """A random six-digit pairing code, the same shape the TV generates."""
+
+    return str(100_000 + secrets.randbelow(900_000))
+
+
+def adb_pairing_command(code: str, client_id: str, client_name: str) -> str:
+    """Shell command that hands a pairing code to the TV app over ADB."""
+
+    return " ".join(
+        [
+            "am broadcast",
+            "-a",
+            ADB_PAIR_ACTION,
+            "-n",
+            ADB_PAIR_RECEIVER,
+            "--es code",
+            shlex.quote(code),
+            "--es clientId",
+            shlex.quote(client_id),
+            "--es clientName",
+            shlex.quote(client_name),
+        ]
+    )
+
+
+async def async_prepare_adb_pairing(
+    hass: Any,
+    host: str,
+    *,
+    code: str,
+    client_id: str,
+    client_name: str,
+) -> None:
+    """Tell the TV app to expect `code` for the next pairing confirmation."""
+
+    device = await _async_connect(hass, host)
+    try:
+        output = str(
+            await _async_adb(
+                device.shell(adb_pairing_command(code, client_id, client_name))
+            )
+        )
+    finally:
+        await _async_close(device)
+    # The receiver answers RESULT_OK (-1) when it accepted the code.
+    if "result=-1" not in output:
+        raise AdbSetupError("pairing_rejected", output.strip()[-200:])
 
 
 async def _async_grant_overlay(device: Any) -> None:

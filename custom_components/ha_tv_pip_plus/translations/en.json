@@ -20,7 +20,8 @@
       "adb_install_conflict": "A differently signed copy of HA TV PiP Plus is already on the TV. Uninstall it on the TV (Settings > Apps), then try again.",
       "adb_install_failed": "The TV refused to install the app. Check Home Assistant's logs for details.",
       "adb_grant_failed": "The app installed, but the TV did not accept the overlay permission.",
-      "adb_adb_failed": "An ADB command failed. Check Home Assistant's logs for details."
+      "adb_adb_failed": "An ADB command failed. Check Home Assistant's logs for details.",
+      "adb_pairing_rejected": "The TV app did not accept automatic pairing."
     },
     "step": {
       "confirm": {
@@ -48,7 +49,7 @@
       },
       "install_app": {
         "title": "Install the app on the TV",
-        "description": "Home Assistant will install the latest HA TV PiP Plus app on {host}, allow it to show popups over other apps, open it, and then pair with it.\n\nBefore you continue, on the TV:\n1. Open Settings > System > About and click the build number 7 times to turn on developer options.\n2. Open Settings > System > Developer options and turn on USB debugging.\n\nAfter you click Submit, watch the TV: accept the 'Allow debugging?' prompt and tick 'Always allow'. Installing takes up to a minute. You can turn USB debugging off again afterwards."
+        "description": "Home Assistant will install the latest HA TV PiP Plus app on {host}, allow it to show popups over other apps, open it, and pair with it automatically. No pairing code needed.\n\nBefore you continue, on the TV:\n1. Open Settings > System > About and click the build number 7 times to turn on developer options.\n2. Open Settings > System > Developer options and turn on USB debugging.\n\nAfter you click Submit, watch the TV: accept the 'Allow debugging?' prompt and tick 'Always allow'. Installing takes up to a minute. You can turn USB debugging off again afterwards."
       }
     }
   },

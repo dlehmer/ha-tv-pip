@@ -1,5 +1,11 @@
 # What's New ✨
 
+## 1.34.0 - Automatic Pairing 🤝
+
+- Adding a TV with "Install the app" now pairs automatically over ADB; no code to type 🔑
+- Only the ADB shell can start this pairing, so other apps on the TV can't 🔒
+- Falls back to the on-screen code if automatic pairing isn't possible ↩️
+
 ## 1.33.1 - Door Button Fix 🔧
 
 - Fixed door buttons being rejected for TVs added by IP address 🔓

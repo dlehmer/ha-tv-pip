@@ -51,3 +51,23 @@ def test_status_parses_overlay_permission() -> None:
     assert status.overlay_permission == "not_granted"
     assert status.package_name == APP_PACKAGE
     assert receiver_status_from_payload({}).overlay_permission is None
+
+
+def test_new_pairing_code_is_six_digits() -> None:
+    from custom_components.ha_tv_pip_plus.adb_setup import new_pairing_code
+
+    for _ in range(50):
+        code = new_pairing_code()
+        assert len(code) == 6 and code.isdigit()
+
+
+def test_adb_pairing_command_targets_protected_receiver() -> None:
+    from custom_components.ha_tv_pip_plus.adb_setup import adb_pairing_command
+
+    command = adb_pairing_command("123456", "home-assistant", "Home Assistant")
+    assert command.startswith("am broadcast -a com.dlehmer.hatvpipplus.action.ADB_PAIR")
+    assert (
+        "-n com.dlehmer.hatvpipplus/com.hatvpip.receiver.AdbPairingReceiver" in command
+    )
+    assert "--es code 123456" in command
+    assert "--es clientName 'Home Assistant'" in command
