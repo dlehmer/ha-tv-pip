@@ -18,6 +18,7 @@ from .actions import (
     default_action_spec,
     pending_action_store,
 )
+from .appearance import apply_appearance, button_style_payload, popup_appearance
 from .client import (
     ReceiverCapabilities,
     ReceiverClientError,
@@ -298,27 +299,20 @@ async def async_register_services(hass: Any) -> None:
         vol.Optional(ATTR_TITLE): str,
         vol.Optional(ATTR_MESSAGE): str,
         vol.Optional(ATTR_POSITION): vol.Any(*NOTIFICATION_POSITIONS),
-        vol.Optional(
-            ATTR_TITLE_COLOR,
-            default=DEFAULT_NOTIFICATION_TITLE_COLOR,
-        ): str,
-        vol.Optional(ATTR_TITLE_SIZE, default=24): vol.All(
+        # Style fields have no schema defaults: a field the automation leaves out
+        # falls back to the saved popup appearance (see appearance.py).
+        vol.Optional(ATTR_TITLE_COLOR): str,
+        vol.Optional(ATTR_TITLE_SIZE): vol.All(
             vol.Coerce(int),
             vol.Range(min=10, max=48),
         ),
-        vol.Optional(
-            ATTR_MESSAGE_COLOR,
-            default=DEFAULT_NOTIFICATION_MESSAGE_COLOR,
-        ): str,
-        vol.Optional(ATTR_MESSAGE_SIZE, default=18): vol.All(
+        vol.Optional(ATTR_MESSAGE_COLOR): str,
+        vol.Optional(ATTR_MESSAGE_SIZE): vol.All(
             vol.Coerce(int),
             vol.Range(min=10, max=40),
         ),
-        vol.Optional(
-            ATTR_BACKGROUND_COLOR,
-            default=DEFAULT_NOTIFICATION_BACKGROUND_COLOR,
-        ): str,
-        vol.Optional(ATTR_TEXT_OVERLAY, default=False): bool,
+        vol.Optional(ATTR_BACKGROUND_COLOR): str,
+        vol.Optional(ATTR_TEXT_OVERLAY): bool,
         vol.Optional(ATTR_WIDTH): vol.All(
             vol.Coerce(int),
             vol.Range(min=240, max=1600),
@@ -648,6 +642,7 @@ async def async_handle_show_camera(hass: Any, call: Any) -> None:
         _validate_camera_entity(hass, request.stream_camera_entity)
     receiver = _resolve_receiver(hass, request)
     request = _apply_camera_defaults(request, receiver, duration_fallback=30)
+    request = _with_popup_appearance(hass, request, call)
     title = request.title or _camera_title(hass, request.camera_entity)
     remote = remote_registry(hass)
     prefer_external = _prefer_remote_transport(receiver, remote)
@@ -753,6 +748,7 @@ async def async_handle_show_snapshot(hass: Any, call: Any) -> None:
     _validate_camera_entity(hass, request.camera_entity)
     receiver = _resolve_receiver(hass, request)
     request = _apply_camera_defaults(request, receiver, duration_fallback=10)
+    request = _with_popup_appearance(hass, request, call)
     remote = remote_registry(hass)
     prefer_external = _prefer_remote_transport(receiver, remote)
     capabilities = await _async_receiver_capabilities(receiver)
@@ -1494,6 +1490,17 @@ async def _async_send_receiver_command(
     return "local"
 
 
+def _with_popup_appearance(hass: Any, request: Any, call: Any) -> Any:
+    """Apply the saved popup appearance to fields the automation left out."""
+
+    return apply_appearance(
+        request,
+        dict(getattr(call, "data", {})),
+        popup_appearance(hass),
+        camera_title=_camera_title(hass, request.camera_entity),
+    )
+
+
 def _with_overlay_actions(
     hass: Any,
     call: Any,
@@ -1540,6 +1547,7 @@ def _with_overlay_actions(
         command,
         actions=tuple(wire_actions),
         action_callback_url=callback_url,
+        button_style=button_style_payload(popup_appearance(hass)),
     )
 
 

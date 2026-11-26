@@ -24,7 +24,8 @@ data class ShowCommand(
     val style: NotificationStyle,
     val muted: Boolean = true,
     val actions: List<OverlayAction> = emptyList(),
-    val actionCallbackUrl: String? = null
+    val actionCallbackUrl: String? = null,
+    val buttonStyle: ButtonStyle = ButtonStyle()
 ) {
     val hasActions: Boolean
         get() = actions.isNotEmpty() && actionCallbackUrl != null
@@ -113,6 +114,7 @@ data class ShowCommand(
                     style = NotificationStyle.fromJson(json),
                     muted = json.optBoolean("muted", true),
                     actions = OverlayAction.listFromJson(json),
+                    buttonStyle = ButtonStyle.fromJson(json.optJSONObject("buttonStyle")),
                     actionCallbackUrl = json.optString("actionCallbackUrl").trim().ifBlank { null }
                         ?.also {
                             require(it.startsWith("http://") || it.startsWith("https://")) {
@@ -181,6 +183,57 @@ data class OverlayAction(
             } else {
                 runCatching { listFromJson(JSONObject().put("actions", org.json.JSONArray(value))) }
                     .getOrDefault(emptyList())
+            }
+    }
+}
+
+/**
+ * How door buttons are drawn. Home Assistant sends this with every popup (set in
+ * the integration's appearance settings), so the look changes without an app update.
+ * Defaults match Home Assistant's dark dashboard tile cards.
+ */
+data class ButtonStyle(
+    val shape: String = "tile",
+    val backgroundColor: String = "#EB1C1C1C",
+    val textColor: String = "#E1E1E1",
+    val accentColor: String = "#03A9F4",
+    val textSize: Int = 16,
+    val cornerRadius: Int = 12,
+    val showIcon: Boolean = true
+) {
+    fun toJson(): JSONObject =
+        JSONObject()
+            .put("shape", shape)
+            .put("backgroundColor", backgroundColor)
+            .put("textColor", textColor)
+            .put("accentColor", accentColor)
+            .put("textSize", textSize)
+            .put("cornerRadius", cornerRadius)
+            .put("showIcon", showIcon)
+
+    companion object {
+        private val SHAPES = setOf("tile", "pill", "square")
+
+        fun fromJson(json: JSONObject?): ButtonStyle {
+            if (json == null) return ButtonStyle()
+            val defaults = ButtonStyle()
+            return ButtonStyle(
+                shape = json.optString("shape", defaults.shape).takeIf { it in SHAPES }
+                    ?: defaults.shape,
+                backgroundColor = json.optString("backgroundColor", defaults.backgroundColor),
+                textColor = json.optString("textColor", defaults.textColor),
+                accentColor = json.optString("accentColor", defaults.accentColor),
+                textSize = json.optInt("textSize", defaults.textSize).coerceIn(10, 32),
+                cornerRadius = json.optInt("cornerRadius", defaults.cornerRadius).coerceIn(0, 40),
+                showIcon = json.optBoolean("showIcon", defaults.showIcon)
+            )
+        }
+
+        fun fromJsonString(value: String?): ButtonStyle =
+            if (value.isNullOrBlank()) {
+                ButtonStyle()
+            } else {
+                runCatching { fromJson(JSONObject(value)) }.getOrDefault(ButtonStyle())
             }
     }
 }

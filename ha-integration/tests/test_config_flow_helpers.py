@@ -57,6 +57,7 @@ from custom_components.ha_tv_pip_plus.const import (  # noqa: E402
     CONF_REMOTE_ACCESS_TOKEN,
     CONF_REMOTE_HOME_ASSISTANT_URL,
     CONF_EDIT_CAMERA_BUTTONS,
+    CONF_EDIT_POPUP_APPEARANCE,
     CONF_SHOW_ADVANCED_OPTIONS,
     CONF_VERSION,
 )
@@ -211,6 +212,7 @@ def test_options_flow_init_step_returns_basic_defaults_form() -> None:
         CONF_DEFAULT_SNAPSHOT_FALLBACK,
         CONF_PREFER_REMOTE_TRANSPORT,
         CONF_EDIT_CAMERA_BUTTONS,
+        CONF_EDIT_POPUP_APPEARANCE,
         CONF_SHOW_ADVANCED_OPTIONS,
     ]
 

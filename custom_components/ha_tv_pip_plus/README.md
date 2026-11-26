@@ -485,7 +485,18 @@ On the TV:
 
 - the popup takes remote focus with the button highlighted;
 - the first OK press asks for confirmation, and a second press within 3 seconds runs it;
-- the popup closes after its duration, when you press Back, or shortly after the action succeeds.
+- after a lock is unlocked or a cover (garage) is opened, the video stays up and the
+  button becomes **Lock …** / **Close …**; the popup closes once the lock is locked or
+  the cover is closed again, whether from the TV, an auto-lock, or anywhere else;
+- other buttons (scripts, buttons) close the popup shortly after they succeed;
+- Back closes the popup at any time.
+
+**Popup and button appearance:** on any receiver's **Configure** page, tick **Customize
+popup and button appearance**. Choose whether popups show text (none by default, over
+the video, or below it), text sizes and colors, popup size, and how buttons look
+(tile like Home Assistant dashboards, pill or square; colors, highlight color, text size,
+corner roundness, icons). The style is sent with every popup, so changes need no app
+update. Automations can still set popup text fields per popup.
 
 **Per-automation buttons:** pass `actions` to override the pairing (up to three
 buttons), or `actions: []` to show none:

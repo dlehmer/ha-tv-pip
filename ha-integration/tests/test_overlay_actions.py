@@ -199,3 +199,40 @@ def test_manually_added_receiver_is_found_by_pairing_token() -> None:
         "manual-10.0.1.248-8767", [UNLOCK], ttl_seconds=30, now=0
     )
     assert store.take(wire[0]["id"], "manual-10.0.1.248-8767", now=1) is not None
+
+
+def test_unlock_offers_lock_and_watches_for_locked() -> None:
+    from custom_components.ha_tv_pip_plus.actions import default_action_spec
+
+    hass = _Hass(
+        {"camera.front": {"entity_id": "lock.front_door"}},
+        {"lock.front_door": _State("Front door")},
+    )
+    spec = default_action_spec(hass, "camera.front")
+    assert spec is not None
+    assert spec["follow_up"]["action"] == "lock.lock"
+    assert spec["follow_up"]["label"] == "Lock Front door"
+    assert spec["follow_up"]["confirm"] is False
+    assert spec["watch_entity"] == "lock.front_door"
+    assert spec["secured_state"] == "locked"
+
+    store = PendingActionStore()
+    action_id = store.replace_for_device("tv", [spec], ttl_seconds=30, now=0)[0]["id"]
+    action = store.take(action_id, "tv", now=1)
+    assert action is not None and action.follow_up is not None
+    assert action.secured_state == "locked"
+
+
+def test_open_garage_offers_close_with_confirmation() -> None:
+    from custom_components.ha_tv_pip_plus.actions import default_action_spec
+
+    hass = _Hass(
+        {"camera.garage": {"entity_id": "cover.door_1"}},
+        {"cover.door_1": _State("Garage", "garage")},
+    )
+    spec = default_action_spec(hass, "camera.garage")
+    assert spec is not None
+    assert spec["follow_up"]["action"] == "cover.close_cover"
+    assert spec["follow_up"]["label"] == "Close Garage"
+    assert spec["follow_up"]["confirm"] is True
+    assert spec["secured_state"] == "closed"

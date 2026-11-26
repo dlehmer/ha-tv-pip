@@ -57,6 +57,7 @@ class ShowCameraCommand:
     muted: bool = True
     actions: tuple[dict[str, Any], ...] = ()
     action_callback_url: str | None = None
+    button_style: dict[str, Any] | None = None
 
 
 def show_camera_payload(command: ShowCameraCommand) -> dict[str, Any]:
@@ -102,6 +103,8 @@ def show_camera_payload(command: ShowCameraCommand) -> dict[str, Any]:
     if command.actions and command.action_callback_url:
         payload["actions"] = [dict(action) for action in command.actions]
         payload["actionCallbackUrl"] = command.action_callback_url
+        if command.button_style:
+            payload["buttonStyle"] = dict(command.button_style)
     return payload
 
 

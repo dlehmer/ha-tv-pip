@@ -5,6 +5,7 @@
 from typing import Any
 
 from .actions import async_load_camera_buttons, async_register_action_view
+from .appearance import async_load_appearance
 from .client import ReceiverClientError, async_reset_receiver_pairing
 from .const import (
     CONF_DEVICE_ID,
@@ -45,6 +46,7 @@ async def async_setup_entry(hass: Any, entry: Any) -> bool:
     await async_register_services(hass)
     async_register_action_view(hass)
     await async_load_camera_buttons(hass)
+    await async_load_appearance(hass)
     await async_setup_remote_api(hass)
     await async_sync_remote_setup(hass, entry)
     config_entries = getattr(hass, "config_entries", None)

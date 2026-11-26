@@ -33,6 +33,8 @@ CAMERA_BUTTONS_STORAGE_KEY = f"{DOMAIN}.camera_buttons"
 CAMERA_BUTTONS_STORAGE_VERSION = 1
 MAX_CAMERA_BUTTONS = 4
 BUTTON_TARGET_DOMAINS = ("lock", "cover", "script", "button")
+# After an unlock/open, the "lock"/"close" button stays valid this long.
+FOLLOW_UP_TTL_SECONDS = 15 * 60
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,11 @@ class PendingAction:
     service: str
     service_data: dict[str, Any]
     expires_at: float
+    # Button that replaces this one after it succeeds (e.g. Lock after Unlock).
+    follow_up: dict[str, Any] | None = None
+    # Close the popup when this entity reaches this state (door secured).
+    watch_entity: str | None = None
+    secured_state: str | None = None
 
 
 @dataclass
@@ -79,6 +86,9 @@ class PendingActionStore:
                 service=service,
                 service_data=service_data,
                 expires_at=now + ttl_seconds + ACTION_TTL_GRACE_SECONDS,
+                follow_up=spec.get("follow_up"),
+                watch_entity=spec.get("watch_entity"),
+                secured_state=spec.get("secured_state"),
             )
             item: dict[str, Any] = {
                 "id": action_id,
@@ -216,13 +226,40 @@ def default_action_spec(hass: Any, camera_entity: str | None) -> dict[str, Any] 
     device_class = str(attributes.get("device_class") or "")
 
     spec: dict[str, Any]
+    entity_target = {"entity_id": [target]}
     if domain == "lock":
-        spec = {"action": "lock.unlock", "target": {"entity_id": [target]}}
+        spec = {
+            "action": "lock.unlock",
+            "target": entity_target,
+            "follow_up": {
+                "action": "lock.lock",
+                "target": entity_target,
+                "label": f"Lock {name}"[:40],
+                "icon": "lock",
+                "confirm": False,
+            },
+            "watch_entity": target,
+            "secured_state": "locked",
+        }
         label, icon = f"Unlock {name}", "unlock"
     elif domain == "cover":
-        spec = {"action": "cover.open_cover", "target": {"entity_id": [target]}}
+        is_garage = device_class == "garage"
+        spec = {
+            "action": "cover.open_cover",
+            "target": entity_target,
+            "follow_up": {
+                "action": "cover.close_cover",
+                "target": entity_target,
+                "label": f"Close {name}"[:40],
+                "icon": "garage-close" if is_garage else "door-close",
+                # Closing a door moves it: keep the second-press confirmation.
+                "confirm": True,
+            },
+            "watch_entity": target,
+            "secured_state": "closed",
+        }
         label = f"Open {name}"
-        icon = "garage" if device_class == "garage" else "door"
+        icon = "garage" if is_garage else "door"
     elif domain == "script":
         # Call the script directly so Home Assistant waits for it to finish and the
         # TV can show whether it worked.
@@ -292,6 +329,86 @@ def actions_schema(vol: Any, cv: Any) -> Any:
         }
     )
     return vol.All(_ensure_list, [item])
+
+
+DATA_SECURED_WATCHERS = "secured_watchers"
+
+
+def async_close_when_secured(
+    hass: Any,
+    device_id: str,
+    entity_id: str,
+    secured_state: str,
+) -> None:
+    """Close the receiver's popup once `entity_id` is back to `secured_state`.
+
+    Covers the TV's own Lock/Close button, a lock's auto-lock, and a garage
+    closed some other way. Gives up after FOLLOW_UP_TTL_SECONDS.
+    """
+
+    from homeassistant.helpers.event import (  # type: ignore[import-not-found]
+        async_call_later,
+        async_track_state_change_event,
+    )
+
+    watchers = hass.data.setdefault(DOMAIN, {}).setdefault(DATA_SECURED_WATCHERS, {})
+    previous = watchers.pop(device_id, None)
+    if previous:
+        previous()
+
+    unsubscribers: list[Any] = []
+
+    def _stop() -> None:
+        for unsubscribe in unsubscribers:
+            unsubscribe()
+        unsubscribers.clear()
+        if watchers.get(device_id) is _stop:
+            watchers.pop(device_id, None)
+
+    async def _async_state_changed(event: Any) -> None:
+        new_state = event.data.get("new_state")
+        if new_state is None or new_state.state != secured_state:
+            return
+        _stop()
+        pending_action_store(hass).clear_device(device_id)
+        await _async_close_receiver_popup(hass, device_id)
+
+    async def _async_timeout(_now: Any) -> None:
+        _stop()
+
+    unsubscribers.append(
+        async_track_state_change_event(hass, [entity_id], _async_state_changed)
+    )
+    unsubscribers.append(
+        async_call_later(hass, FOLLOW_UP_TTL_SECONDS, _async_timeout)
+    )
+    watchers[device_id] = _stop
+
+
+async def _async_close_receiver_popup(hass: Any, device_id: str) -> None:
+    from .const import CONF_DEVICE_ID
+    from .remote import remote_registry
+    from .services import (
+        _async_close_receiver_command,
+        _prefer_remote_transport,
+        _resolve_receiver_from_entry,
+    )
+
+    entries = hass.data.get(DOMAIN, {}).get("entries", {})
+    for entry in entries.values():
+        if str(entry.data.get(CONF_DEVICE_ID)) != device_id:
+            continue
+        try:
+            receiver = _resolve_receiver_from_entry(entry)
+            remote = remote_registry(hass)
+            await _async_close_receiver_command(
+                receiver,
+                remote,
+                prefer_remote=_prefer_remote_transport(receiver, remote),
+            )
+        except Exception as error:  # noqa: BLE001
+            _LOGGER.warning("Could not close the popup on %s: %s", device_id, error)
+        return
 
 
 def async_register_action_view(hass: Any) -> None:
@@ -366,6 +483,19 @@ def _build_action_view() -> Any:
                 return self.json(
                     {"error": str(error) or type(error).__name__}, status_code=500
                 )
-            return self.json({"ok": True, "label": action.label})
+
+            response: dict[str, Any] = {"ok": True, "label": action.label}
+            if action.follow_up:
+                wire = pending_action_store(hass).replace_for_device(
+                    device_id,
+                    [action.follow_up],
+                    ttl_seconds=FOLLOW_UP_TTL_SECONDS,
+                )
+                response["next"] = wire[0]
+            if action.watch_entity and action.secured_state:
+                async_close_when_secured(
+                    hass, device_id, action.watch_entity, action.secured_state
+                )
+            return self.json(response)
 
     return HaTvPipActionView()

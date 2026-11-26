@@ -75,7 +75,8 @@
           "default_stream_type": "Preferred stream strategy",
           "prefer_remote_transport": "Prefer remote transport",
           "show_advanced_options": "Show advanced settings",
-          "edit_camera_buttons": "Set up door buttons for cameras"
+          "edit_camera_buttons": "Set up door buttons for cameras",
+          "edit_popup_appearance": "Customize popup and button appearance"
         },
         "description": "Set everyday receiver defaults. Advanced popup size, position, and remote receiver credentials are hidden unless needed.",
         "title": "Receiver defaults"
@@ -107,6 +108,29 @@
           "camera_4": "Camera 4",
           "button_target_4": "Lock, cover, script or button for camera 4",
           "button_label_4": "Button label for camera 4 (optional)"
+        }
+      },
+      "appearance": {
+        "title": "Popup and button appearance",
+        "description": "How camera popups and door buttons look on every TV. Changes apply to the next popup; no app update needed. Automations can still override popup text per popup.\n\nWidth and height of 0 use the built-in size (640 × 360). Button defaults match Home Assistant's dashboard tiles.",
+        "data": {
+          "text_mode": "Text",
+          "title_size": "Title size",
+          "title_color": "Title color",
+          "message_size": "Message size",
+          "message_color": "Message color",
+          "background_color": "Text background color",
+          "background_opacity": "Text background opacity",
+          "width": "Popup width (0 = default)",
+          "height": "Popup height (0 = default)",
+          "button_shape": "Button shape",
+          "button_background_color": "Button color",
+          "button_background_opacity": "Button opacity",
+          "button_text_color": "Button text color",
+          "button_accent_color": "Button highlight color (selected button and icon)",
+          "button_text_size": "Button text size",
+          "button_corner_radius": "Button corner roundness",
+          "button_show_icon": "Show button icons"
         }
       }
     }
@@ -615,6 +639,22 @@
     "receiver_overlay_permission": {
       "title": "{receiver} can't show door buttons",
       "description": "The HA TV PiP Plus app on {receiver} isn't allowed to display over other apps, so popups open full screen without buttons.\n\nTo fix it, open the TV's device page in Home Assistant and press **Grant Overlay Permission** (USB debugging must be on in the TV's developer options; accept the 'Allow debugging?' prompt on the TV the first time). Or, on the TV, open HA TV PiP Plus and select **Overlay Settings**."
+    }
+  },
+  "selector": {
+    "text_mode": {
+      "options": {
+        "none": "No text",
+        "over_video": "Over the video",
+        "below_video": "Below the video"
+      }
+    },
+    "button_shape": {
+      "options": {
+        "tile": "Tile (like Home Assistant dashboards)",
+        "pill": "Pill",
+        "square": "Square"
+      }
     }
   }
 }

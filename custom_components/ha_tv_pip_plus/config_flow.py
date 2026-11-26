@@ -21,6 +21,13 @@ from .adb_setup import (
     async_prepare_adb_pairing,
     new_pairing_code,
 )
+from .appearance import (
+    BUTTON_SHAPES,
+    TEXT_MODES,
+    async_save_appearance,
+    hex_to_rgb,
+    popup_appearance,
+)
 from .client import (
     ReceiverClientError,
     async_confirm_pairing,
@@ -38,6 +45,7 @@ from .const import (
     CONF_DEFAULT_WIDTH,
     CONF_DEVICE_ID,
     CONF_EDIT_CAMERA_BUTTONS,
+    CONF_EDIT_POPUP_APPEARANCE,
     CONF_HOST,
     CONF_INSTALL_APP,
     CONF_NAME,
@@ -307,7 +315,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
 
         self._config_entry = config_entry
         self._pending_basic_options: dict[str, Any] | None = None
-        self._advanced_after_camera_buttons = False
+        self._next_steps: list[str] = []
 
     @property
     def _entry(self) -> Any:
@@ -344,6 +352,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
         )
         show_advanced_options = False
         edit_camera_buttons = False
+        edit_popup_appearance = False
 
         if user_input is not None:
             default_stream_type = str(
@@ -366,6 +375,9 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
             edit_camera_buttons = bool(
                 user_input.get(CONF_EDIT_CAMERA_BUTTONS, False)
             )
+            edit_popup_appearance = bool(
+                user_input.get(CONF_EDIT_POPUP_APPEARANCE, False)
+            )
 
             if default_stream_type not in STREAM_TYPES:
                 errors[CONF_DEFAULT_STREAM_TYPE] = "invalid_default_stream_type"
@@ -378,10 +390,18 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                     default_snapshot_fallback=default_snapshot_fallback,
                     prefer_remote_transport=prefer_remote_transport,
                 )
-                if edit_camera_buttons:
+                if edit_camera_buttons or edit_popup_appearance:
                     self._pending_basic_options = basic_options
-                    self._advanced_after_camera_buttons = show_advanced_options
-                    return await self.async_step_camera_buttons()
+                    self._next_steps = [
+                        step
+                        for step, wanted in (
+                            ("camera_buttons", edit_camera_buttons),
+                            ("appearance", edit_popup_appearance),
+                            ("advanced", show_advanced_options),
+                        )
+                        if wanted
+                    ]
+                    return await self._async_next_options_step()
                 if show_advanced_options:
                     self._pending_basic_options = basic_options
                     return await self.async_step_advanced()
@@ -423,12 +443,45 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                         default=edit_camera_buttons,
                     ): bool,
                     vol.Optional(
+                        CONF_EDIT_POPUP_APPEARANCE,
+                        default=edit_popup_appearance,
+                    ): bool,
+                    vol.Optional(
                         CONF_SHOW_ADVANCED_OPTIONS,
                         default=show_advanced_options,
                     ): bool,
                 }
             ),
             errors=errors,
+        )
+
+    async def _async_next_options_step(self) -> Any:
+        """Run the next settings page the user ticked, or save and finish."""
+
+        if self._next_steps:
+            step = self._next_steps.pop(0)
+            return await getattr(self, f"async_step_{step}")()
+        basic = self._pending_basic_options or _current_basic_options(self._entry)
+        self._pending_basic_options = None
+        return self.async_create_entry(
+            title="",
+            data=_options_with_preserved_advanced(self._entry, basic),
+        )
+
+    async def async_step_appearance(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Popup look shared by every receiver: text, colors, and size."""
+
+        hass = getattr(self, "hass", None)
+        if user_input is not None:
+            await async_save_appearance(hass, user_input)
+            return await self._async_next_options_step()
+
+        return self.async_show_form(
+            step_id="appearance",
+            data_schema=vol.Schema(appearance_form_fields(popup_appearance(hass))),
         )
 
     async def async_step_camera_buttons(
@@ -449,17 +502,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                 errors["base"] = error
             else:
                 await async_save_camera_buttons(hass, pairings)
-                if self._advanced_after_camera_buttons:
-                    self._advanced_after_camera_buttons = False
-                    return await self.async_step_advanced()
-                basic = self._pending_basic_options or _current_basic_options(
-                    self._entry
-                )
-                self._pending_basic_options = None
-                return self.async_create_entry(
-                    title="",
-                    data=_options_with_preserved_advanced(self._entry, basic),
-                )
+                return await self._async_next_options_step()
             current = camera_buttons_form_values(user_input)
         else:
             current = camera_buttons_form_values(
@@ -619,6 +662,94 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
             },
             errors=errors,
         )
+
+
+def appearance_form_fields(current: dict[str, Any]) -> dict[Any, Any]:
+    """Form fields for the popup appearance page, prefilled with `current`."""
+
+    def number(low: int, high: int, unit: str, slider: bool = False) -> Any:
+        if ha_selector is None:
+            return int
+        return ha_selector.NumberSelector(
+            ha_selector.NumberSelectorConfig(
+                min=low,
+                max=high,
+                step=1,
+                unit_of_measurement=unit,
+                mode=(
+                    ha_selector.NumberSelectorMode.SLIDER
+                    if slider
+                    else ha_selector.NumberSelectorMode.BOX
+                ),
+            )
+        )
+
+    def color() -> Any:
+        if ha_selector is None:
+            return list
+        return ha_selector.ColorRGBSelector()
+
+    def choice(options: tuple[str, ...], translation_key: str) -> Any:
+        if ha_selector is None:
+            return vol.Any(*options)
+        return ha_selector.SelectSelector(
+            ha_selector.SelectSelectorConfig(
+                options=list(options),
+                mode=ha_selector.SelectSelectorMode.LIST,
+                translation_key=translation_key,
+            )
+        )
+
+    def text_mode() -> Any:
+        return choice(TEXT_MODES, "text_mode")
+
+    return {
+        vol.Required("text_mode", default=current["text_mode"]): text_mode(),
+        vol.Required("title_size", default=current["title_size"]): number(
+            10, 48, "px"
+        ),
+        vol.Required(
+            "title_color", default=hex_to_rgb(current["title_color"])
+        ): color(),
+        vol.Required("message_size", default=current["message_size"]): number(
+            10, 40, "px"
+        ),
+        vol.Required(
+            "message_color", default=hex_to_rgb(current["message_color"])
+        ): color(),
+        vol.Required(
+            "background_color", default=hex_to_rgb(current["background_color"])
+        ): color(),
+        vol.Required(
+            "background_opacity", default=current["background_opacity"]
+        ): number(0, 100, "%", slider=True),
+        vol.Required("width", default=current["width"]): number(0, 1600, "px"),
+        vol.Required("height", default=current["height"]): number(0, 900, "px"),
+        vol.Required("button_shape", default=current["button_shape"]): choice(
+            BUTTON_SHAPES, "button_shape"
+        ),
+        vol.Required(
+            "button_background_color",
+            default=hex_to_rgb(current["button_background_color"]),
+        ): color(),
+        vol.Required(
+            "button_background_opacity",
+            default=current["button_background_opacity"],
+        ): number(0, 100, "%", slider=True),
+        vol.Required(
+            "button_text_color", default=hex_to_rgb(current["button_text_color"])
+        ): color(),
+        vol.Required(
+            "button_accent_color", default=hex_to_rgb(current["button_accent_color"])
+        ): color(),
+        vol.Required(
+            "button_text_size", default=current["button_text_size"]
+        ): number(10, 32, "px"),
+        vol.Required(
+            "button_corner_radius", default=current["button_corner_radius"]
+        ): number(0, 40, "px"),
+        vol.Required("button_show_icon", default=current["button_show_icon"]): bool,
+    }
 
 
 def _entity_selector(domains: tuple[str, ...]) -> Any:

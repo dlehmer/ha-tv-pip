@@ -53,7 +53,8 @@ class OverlayPlayerService : Service() {
     private var actions: List<OverlayAction> = emptyList()
     private var actionCallbackUrl: String? = null
     private var actionInFlight: Boolean = false
-    private val actionButtons = mutableListOf<TextView>()
+    private val actionButtons = mutableListOf<ActionButton>()
+    private var buttonStyle: ButtonStyle = ButtonStyle()
     @Volatile private var mjpegRunning: Boolean = false
     private var mjpegThread: Thread? = null
     private val autoCloseHandler = Handler(Looper.getMainLooper())
@@ -121,6 +122,9 @@ class OverlayPlayerService : Service() {
                 } else {
                     emptyList()
                 }
+                buttonStyle = ButtonStyle.fromJsonString(
+                    intent?.getStringExtra(PlayerActivity.EXTRA_BUTTON_STYLE_JSON)
+                )
                 actionInFlight = false
                 showOverlay()
             }
@@ -202,7 +206,7 @@ class OverlayPlayerService : Service() {
         runCatching {
             windowManager.addView(root, params)
             overlayView = root
-            actionButtons.firstOrNull()?.let { button -> button.post { button.requestFocus() } }
+            actionButtons.firstOrNull()?.root?.let { button -> button.post { button.requestFocus() } }
             updatePlaybackState(
                 status = if (streamType == StreamType.Notification) PlaybackStatus.Ready else PlaybackStatus.Buffering,
                 isPlaying = false,
@@ -342,6 +346,28 @@ class OverlayPlayerService : Service() {
             )
         }
 
+    /** One door button: an optional round icon badge and a label, drawn per [buttonStyle]. */
+    private inner class ActionButton(
+        val root: LinearLayout,
+        private val badge: TextView,
+        private val label: TextView
+    ) {
+        var action: OverlayAction? = null
+            private set
+
+        fun show(next: OverlayAction) {
+            action = next
+            label.text = next.label
+            val glyph = iconGlyph(next.icon)
+            badge.text = glyph.orEmpty()
+            badge.visibility = if (buttonStyle.showIcon && glyph != null) View.VISIBLE else View.GONE
+        }
+
+        fun setLabel(text: String) {
+            label.text = text
+        }
+    }
+
     private fun buildActionBar(): LinearLayout {
         actionButtons.clear()
         val bar = LinearLayout(this).apply {
@@ -355,57 +381,85 @@ class OverlayPlayerService : Service() {
             )
         }
         actions.forEachIndexed { index, action ->
-            val button = TextView(this).apply {
-                text = action.displayLabel()
-                setTextColor(Color.WHITE)
-                textSize = ACTION_TEXT_SIZE_SP
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                gravity = Gravity.CENTER
-                maxLines = 1
-                setPadding(ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX, ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX)
-                background = actionButtonBackground()
-                isFocusable = true
-                isFocusableInTouchMode = true
-                isClickable = true
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    if (index > 0) marginStart = ACTION_BUTTON_GAP_PX
-                }
-                setOnKeyListener { _, keyCode, event ->
-                    if (keyCode == KeyEvent.KEYCODE_BACK) {
-                        if (event.action == KeyEvent.ACTION_UP) {
-                            AppLog.playbackStop(reason = "overlay_back_pressed")
-                            stopSelf()
-                        }
-                        true
-                    } else {
-                        false
-                    }
-                }
-                setOnFocusChangeListener { view, hasFocus ->
-                    view.animate().scaleX(if (hasFocus) 1.05f else 1f)
-                        .scaleY(if (hasFocus) 1.05f else 1f)
-                        .setDuration(120)
-                        .start()
-                }
-            }
-            button.setOnClickListener { onActionPressed(button, action) }
+            val button = buildActionButton(index)
+            button.show(action)
+            button.root.setOnClickListener { onActionPressed(button) }
             actionButtons += button
-            bar.addView(button)
+            bar.addView(button.root)
         }
         return bar
     }
 
+    private fun buildActionButton(index: Int): ActionButton {
+        val style = buttonStyle
+        val accent = parseColorOrDefault(style.accentColor, DEFAULT_ACCENT_COLOR)
+        val textColor = parseColorOrDefault(style.textColor, Color.WHITE)
+        val badge = TextView(this).apply {
+            gravity = Gravity.CENTER
+            textSize = style.textSize.toFloat()
+            includeFontPadding = false
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(withAlpha(accent, BADGE_ALPHA))
+            }
+            layoutParams = LinearLayout.LayoutParams(BADGE_SIZE_PX, BADGE_SIZE_PX).apply {
+                marginEnd = BADGE_GAP_PX
+            }
+        }
+        val label = TextView(this).apply {
+            setTextColor(textColor)
+            textSize = style.textSize.toFloat()
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            includeFontPadding = false
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = if (style.shape == "tile") Gravity.CENTER_VERTICAL or Gravity.START else Gravity.CENTER
+            setPadding(ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX, ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX)
+            background = actionButtonBackground(style, accent)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            isClickable = true
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index > 0) marginStart = ACTION_BUTTON_GAP_PX
+            }
+            addView(badge)
+            addView(label)
+            setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (event.action == KeyEvent.ACTION_UP) {
+                        AppLog.playbackStop(reason = "overlay_back_pressed")
+                        stopSelf()
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            setOnFocusChangeListener { view, hasFocus ->
+                view.animate().scaleX(if (hasFocus) 1.04f else 1f)
+                    .scaleY(if (hasFocus) 1.04f else 1f)
+                    .setDuration(120)
+                    .start()
+            }
+        }
+        return ActionButton(root, badge, label)
+    }
+
     private var armedActionId: String? = null
 
-    private fun onActionPressed(button: TextView, action: OverlayAction) {
+    private fun onActionPressed(button: ActionButton) {
+        val action = button.action ?: return
         if (actionInFlight) return
         if (action.confirm && armedActionId != action.id) {
             armedActionId = action.id
-            button.text = action.confirmLabel ?: getString(R.string.overlay_action_confirm)
+            button.setLabel(action.confirmLabel ?: getString(R.string.overlay_action_confirm))
             mainHandler.postDelayed({
                 if (armedActionId == action.id && !actionInFlight) {
                     armedActionId = null
-                    button.text = action.displayLabel()
+                    button.setLabel(action.label)
                 }
             }, ACTION_CONFIRM_WINDOW_MS)
             return
@@ -414,26 +468,37 @@ class OverlayPlayerService : Service() {
         runAction(button, action)
     }
 
-    private fun runAction(button: TextView, action: OverlayAction) {
+    private fun runAction(button: ActionButton, action: OverlayAction) {
         val callbackUrl = actionCallbackUrl ?: return
         actionInFlight = true
         // Don't let the popup time out underneath a request that is still running.
         autoCloseHandler.removeCallbacksAndMessages(null)
-        button.text = getString(R.string.overlay_action_working)
+        button.setLabel(getString(R.string.overlay_action_working))
         Thread {
             val result = runCatching { postAction(callbackUrl, action.id) }
             mainHandler.post {
                 actionInFlight = false
                 if (overlayView == null) return@post
-                result.onSuccess {
+                result.onSuccess { response ->
                     AppLog.lifecycleEvent("overlay_action_succeeded", action.label)
-                    button.text = getString(R.string.overlay_action_done)
-                    autoCloseHandler.postDelayed({ stopSelf() }, ACTION_SUCCESS_CLOSE_DELAY_MS)
+                    val next = response.optJSONObject("next")?.let { json ->
+                        OverlayAction.listFromJsonString(org.json.JSONArray().put(json).toString())
+                            .firstOrNull()
+                    }
+                    if (next != null) {
+                        // Door unlocked / garage opened: keep the video up and offer
+                        // Lock / Close. Home Assistant closes the popup once secured.
+                        button.show(next)
+                        autoCloseHandler.postDelayed({ stopSelf() }, FOLLOW_UP_CLOSE_DELAY_MS)
+                    } else {
+                        button.setLabel(getString(R.string.overlay_action_done))
+                        autoCloseHandler.postDelayed({ stopSelf() }, ACTION_SUCCESS_CLOSE_DELAY_MS)
+                    }
                 }.onFailure { error ->
                     AppLog.error("Overlay action failed: ${action.label}", error)
-                    button.text = getString(R.string.overlay_action_failed)
+                    button.setLabel(getString(R.string.overlay_action_failed))
                     mainHandler.postDelayed({
-                        if (overlayView != null && !actionInFlight) button.text = action.displayLabel()
+                        if (overlayView != null && !actionInFlight) button.setLabel(action.label)
                     }, ACTION_FAILED_RESET_MS)
                     autoCloseHandler.postDelayed({ stopSelf() }, ACTION_FAILED_CLOSE_DELAY_MS)
                 }
@@ -441,7 +506,7 @@ class OverlayPlayerService : Service() {
         }.start()
     }
 
-    private fun postAction(callbackUrl: String, actionId: String) {
+    private fun postAction(callbackUrl: String, actionId: String): JSONObject {
         val token = PairingState.pairedToken(applicationContext)
             ?: throw IOException("Receiver is not paired")
         val body = JSONObject()
@@ -467,32 +532,42 @@ class OverlayPlayerService : Service() {
                 }.getOrNull()
                 throw IOException("Home Assistant returned HTTP $status${detail?.let { ": $it" } ?: ""}")
             }
+            val text = connection.inputStream.bufferedReader().use { it.readText() }
+            return runCatching { JSONObject(text) }.getOrDefault(JSONObject())
         } finally {
             connection.disconnect()
         }
     }
 
-    private fun actionButtonBackground(): StateListDrawable =
-        StateListDrawable().apply {
+    private fun actionButtonBackground(style: ButtonStyle, accent: Int): StateListDrawable {
+        val fill = parseColorOrDefault(style.backgroundColor, DEFAULT_BUTTON_COLOR)
+        val radius = when (style.shape) {
+            "pill" -> PILL_RADIUS_PX
+            "square" -> 0f
+            else -> style.cornerRadius.toFloat()
+        }
+        return StateListDrawable().apply {
             addState(
                 intArrayOf(android.R.attr.state_focused),
                 GradientDrawable().apply {
-                    setColor(ACTION_FOCUSED_COLOR)
-                    cornerRadius = ACTION_BUTTON_CORNER_RADIUS_PX
-                    setStroke(ACTION_FOCUSED_STROKE_PX, Color.WHITE)
+                    setColor(fill)
+                    cornerRadius = radius
+                    setStroke(ACTION_FOCUSED_STROKE_PX, accent)
                 }
             )
             addState(
                 intArrayOf(),
                 GradientDrawable().apply {
-                    setColor(ACTION_IDLE_COLOR)
-                    cornerRadius = ACTION_BUTTON_CORNER_RADIUS_PX
+                    setColor(fill)
+                    cornerRadius = radius
+                    setStroke(1, IDLE_OUTLINE_COLOR)
                 }
             )
         }
+    }
 
-    private fun OverlayAction.displayLabel(): String =
-        iconGlyph(icon)?.let { "$it  $label" } ?: label
+    private fun withAlpha(color: Int, alpha: Int): Int =
+        Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
 
     private fun addNotificationContent(root: LinearLayout, fillHeight: Boolean) {
         root.addView(
@@ -954,16 +1029,20 @@ class OverlayPlayerService : Service() {
         private const val ACTION_BUTTON_GAP_PX = 16
         private const val ACTION_BUTTON_H_PADDING_PX = 20
         private const val ACTION_BUTTON_V_PADDING_PX = 14
-        private const val ACTION_BUTTON_CORNER_RADIUS_PX = 28f
         private const val ACTION_FOCUSED_STROKE_PX = 3
-        private const val ACTION_TEXT_SIZE_SP = 18f
-        private const val ACTION_IDLE_COLOR = 0x33FFFFFF
-        private val ACTION_FOCUSED_COLOR = 0xFF1E88E5.toInt()
         private const val ACTION_CONFIRM_WINDOW_MS = 3_000L
         private const val ACTION_SUCCESS_CLOSE_DELAY_MS = 1_500L
         private const val ACTION_FAILED_RESET_MS = 3_000L
         private const val ACTION_FAILED_CLOSE_DELAY_MS = 10_000L
         private const val ACTION_TIMEOUT_MS = 30_000
+        private const val FOLLOW_UP_CLOSE_DELAY_MS = 15 * 60 * 1_000L
+        private const val BADGE_SIZE_PX = 40
+        private const val BADGE_GAP_PX = 14
+        private const val BADGE_ALPHA = 0x33
+        private const val PILL_RADIUS_PX = 999f
+        private const val IDLE_OUTLINE_COLOR = 0x22FFFFFF
+        private val DEFAULT_ACCENT_COLOR = 0xFF03A9F4.toInt()
+        private val DEFAULT_BUTTON_COLOR = 0xEB1C1C1C.toInt()
     }
 }
 
@@ -971,9 +1050,10 @@ internal fun iconGlyph(icon: String?): String? =
     when (icon?.trim()?.lowercase()?.removePrefix("mdi:")) {
         null, "" -> null
         "unlock", "lock-open", "lock-open-variant" -> "\uD83D\uDD13"
-        "lock" -> "\uD83D\uDD12"
+        "lock", "lock-outline" -> "\uD83D\uDD12"
         "garage", "garage-open", "garage-variant", "car" -> "\uD83D\uDE97"
-        "door", "door-open" -> "\uD83D\uDEAA"
+        "garage-close", "garage-lock" -> "\u2B07\uFE0F"
+        "door", "door-open", "door-close", "door-closed" -> "\uD83D\uDEAA"
         "light", "lightbulb" -> "\uD83D\uDCA1"
         "bell", "doorbell" -> "\uD83D\uDD14"
         else -> icon?.takeIf { it.codePointCount(0, it.length) <= 2 }

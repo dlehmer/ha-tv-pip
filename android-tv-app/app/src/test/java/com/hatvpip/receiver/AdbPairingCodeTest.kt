@@ -14,3 +14,35 @@ class AdbPairingCodeTest {
         assertFalse(PairingState.isValidCode(""))
     }
 }
+
+class ButtonStyleTest {
+    @Test
+    fun defaultsMatchHomeAssistantTiles() {
+        val style = ButtonStyle.fromJson(null)
+        org.junit.Assert.assertEquals("tile", style.shape)
+        org.junit.Assert.assertEquals("#03A9F4", style.accentColor)
+        org.junit.Assert.assertEquals(12, style.cornerRadius)
+    }
+
+    @Test
+    fun parsesAndClampsHomeAssistantSettings() {
+        val style = ButtonStyle.fromJson(
+            org.json.JSONObject()
+                .put("shape", "pill")
+                .put("accentColor", "#FF9800")
+                .put("textSize", 99)
+                .put("showIcon", false)
+        )
+        org.junit.Assert.assertEquals("pill", style.shape)
+        org.junit.Assert.assertEquals("#FF9800", style.accentColor)
+        org.junit.Assert.assertEquals(32, style.textSize)
+        assertFalse(style.showIcon)
+        org.junit.Assert.assertEquals(style, ButtonStyle.fromJsonString(style.toJson().toString()))
+    }
+
+    @Test
+    fun unknownShapeFallsBackToTile() {
+        val style = ButtonStyle.fromJson(org.json.JSONObject().put("shape", "blob"))
+        org.junit.Assert.assertEquals("tile", style.shape)
+    }
+}
