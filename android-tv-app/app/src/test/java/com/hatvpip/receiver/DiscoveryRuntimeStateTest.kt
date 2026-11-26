@@ -22,7 +22,7 @@ class DiscoveryRuntimeStateTest {
         val snapshot = DiscoveryRuntimeState.snapshot()
         assertTrue(snapshot.running)
         assertEquals("HA TV PiP - Nursery TV", snapshot.serviceName)
-        assertEquals("_ha-tv-pip._tcp.", snapshot.serviceType)
+        assertEquals("_ha-tv-pip-plus._tcp.", snapshot.serviceType)
         assertEquals(8765, snapshot.port)
         assertNull(snapshot.errorMessage)
     }
