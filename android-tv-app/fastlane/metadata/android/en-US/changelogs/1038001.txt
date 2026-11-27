@@ -1,0 +1,3 @@
+- Back closes every camera popup at once and resumes your show ↩️
+- When a popup times out, the others slide over and the first grows to full size 🔄
+- A popup whose button you've selected stays until you dismiss it 📌
