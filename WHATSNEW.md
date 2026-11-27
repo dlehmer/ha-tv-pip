@@ -1,5 +1,9 @@
 # What's New ✨
 
+## 1.37.1 - Settings Entities Fix 🔧
+
+- Do not disturb, turn-on and still settings now show up as entities 🧩
+
 ## 1.37.0 - Do Not Disturb and One-Page Settings 🔕
 
 - Do not disturb per TV: a switch, an entity you pick, or set hours 🔕

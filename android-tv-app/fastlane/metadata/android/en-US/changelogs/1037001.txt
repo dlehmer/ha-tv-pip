@@ -1,0 +1,1 @@
+- Do not disturb, turn-on and still settings now show up as entities 🧩

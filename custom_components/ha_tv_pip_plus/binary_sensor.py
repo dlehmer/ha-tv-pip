@@ -96,13 +96,13 @@ class ReceiverDoNotDisturbActiveBinarySensor(
             )
         except ModuleNotFoundError:
             return
-        self._on_remove(
+        self._remove_with_entity(
             async_track_time_interval(
                 self.hass, self._async_tick, timedelta(minutes=1)
             )
         )
         self._track_control_entity()
-        self._on_remove(self._untrack_control_entity)
+        self._remove_with_entity(self._untrack_control_entity)
 
     async def _async_tick(self, _now: Any) -> None:
         self._write_state()

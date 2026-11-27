@@ -53,7 +53,7 @@ class ReceiverScheduleEntity(ReceiverEntity):
         if callable(write_state):
             write_state()
 
-    def _on_remove(self, callback: Any) -> None:
+    def _remove_with_entity(self, callback: Any) -> None:
         on_remove = getattr(self, "async_on_remove", None)
         if callable(on_remove):
             on_remove(callback)
