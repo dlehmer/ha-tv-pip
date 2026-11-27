@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import types
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -75,13 +76,10 @@ from .remote import remote_registry
 from .restreaming import restreaming_provider_metadata
 from .schedule import dnd_reason, may_wake_tv
 from .stills import (
-    CONF_STILL_EVENT_IMAGE,
-    CONF_STILL_FISHEYE_CAMERAS,
     CONF_WOKEN_TV_VIEW,
     VIEW_LIVE,
     VIEW_STILL,
     async_capture_still,
-    event_image_entity_for,
     still_options,
 )
 
@@ -1562,20 +1560,61 @@ TEST_STREAM_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
 
 
 async def async_send_test_popup(hass: Any, entry: Any) -> str:
-    """Send a 15-second test video popup to one TV. Returns the transport used.
+    """Send a test popup to one TV. Returns how it was sent.
 
-    Do not disturb is ignored (a test is always on purpose), but the TV is only
-    turned on if its turn-on setting allows it right now, so the test shows
-    exactly what a real popup would do with the TV.
+    If a camera is paired with a door button, the test is that camera's live
+    popup with its button, exactly as a real ring would look (including
+    turning the TV on and the still shown while it wakes). The button is a
+    harmless stand-in: pressing it only posts a notification in Home
+    Assistant, so a test never unlocks or opens anything. Without a paired
+    camera, a 15-second public test video is shown instead.
 
-    If the TV has fisheye cameras set for stills, the test shows the flattened
-    still of the first one instead, so zoom and aim can be tuned.
+    Do not disturb is ignored, since a test is always on purpose.
     """
+
+    doorbell = _test_doorbell(hass)
+    device_id = _ha_device_id_for_entry(hass, entry)
+    if doorbell is not None and device_id is not None:
+        camera, label, icon = doorbell
+        call = types.SimpleNamespace(
+            data={
+                ATTR_CAMERA_ENTITY: camera,
+                ATTR_TITLE: f"Test: {_camera_title(hass, camera)}",
+                ATTR_MESSAGE: "Test popup. The button won't unlock or open anything.",
+                ATTR_DURATION_SECONDS: 20,
+                ATTR_ENTER_PIP: True,
+                ATTR_MUTED: True,
+                ATTR_IGNORE_DND: True,
+                ATTR_ACTIONS: [
+                    {
+                        "label": label,
+                        "icon": icon,
+                        "action": "persistent_notification.create",
+                        "data": {
+                            "title": "HA TV PiP Plus test",
+                            "message": (
+                                f"The '{label}' test button was pressed on "
+                                f"{entry.title}. Nothing was unlocked or opened."
+                            ),
+                        },
+                    }
+                ],
+            },
+            target={ATTR_DEVICE_ID: [device_id]},
+        )
+        await async_handle_show_camera(hass, call)
+        return "doorbell"
 
     receiver = _resolve_receiver_from_entry(entry)
     remote = remote_registry(hass)
     prefer_remote = _prefer_remote_transport(receiver, remote)
-    command = await _async_test_command(hass, receiver, prefer_remote)
+    command = ShowCameraCommand(
+        title="HA TV PiP Plus Test",
+        url=TEST_STREAM_URL,
+        duration_seconds=15,
+        enter_pip=True,
+        stream_type="hls",
+    )
     woke_tv = await _async_wake_tv_for_popup(hass, receiver)
     transport = await _async_send_receiver_command(
         receiver,
@@ -1587,6 +1626,42 @@ async def async_send_test_popup(hass: Any, entry: Any) -> str:
         hass, receiver, remote, command, woke_tv, prefer_remote=prefer_remote
     )
     return transport
+
+
+def _test_doorbell(hass: Any) -> tuple[str, str, str] | None:
+    """(camera, button label, icon) for the test popup, preferring a door lock."""
+
+    pairings = camera_buttons(hass) or {}
+    if not pairings:
+        return None
+    camera, pairing = next(
+        (
+            (camera, pairing)
+            for camera, pairing in pairings.items()
+            if str(pairing.get("entity_id", "")).startswith("lock.")
+        ),
+        next(iter(pairings.items())),
+    )
+    spec = default_action_spec(hass, camera) or {}
+    target = str(pairing.get("entity_id", ""))
+    label = str(pairing.get("label") or spec.get("label") or "Unlock")[:40]
+    icon = str(spec.get("icon") or ("unlock" if target.startswith("lock.") else ""))
+    return camera, label, icon or "unlock"
+
+
+def _ha_device_id_for_entry(hass: Any, entry: Any) -> str | None:
+    """Home Assistant's device id for this TV (what service targets use)."""
+
+    try:
+        from homeassistant.helpers import (  # type: ignore[import-not-found]
+            device_registry as dr,
+        )
+    except (ImportError, ModuleNotFoundError):
+        return None
+    device = dr.async_get(hass).async_get_device(
+        identifiers={(DOMAIN, str(entry.data[CONF_DEVICE_ID]))}
+    )
+    return None if device is None else str(device.id)
 
 
 async def _async_still_for_woken_tv(
@@ -1632,48 +1707,6 @@ async def _async_still_for_woken_tv(
             fallback_stream_type=None,
         )
     return replace(command, preview_url=still_url)
-
-
-def _test_still_camera(hass: Any, receiver: ReceiverEntry) -> str | None:
-    """The camera whose still the test popup should preview, if any.
-
-    A fisheye camera set for flattening, or else (when the event picture is
-    turned on) the first door-button camera that has one.
-    """
-
-    settings = still_options(receiver.options)
-    if settings[CONF_STILL_FISHEYE_CAMERAS]:
-        return str(settings[CONF_STILL_FISHEYE_CAMERAS][0])
-    if settings[CONF_STILL_EVENT_IMAGE]:
-        for camera in camera_buttons(hass) or {}:
-            if event_image_entity_for(hass, camera) is not None:
-                return str(camera)
-    return None
-
-
-async def _async_test_command(
-    hass: Any, receiver: ReceiverEntry, prefer_remote: bool
-) -> ShowCameraCommand:
-    camera = _test_still_camera(hass, receiver)
-    if camera is not None:
-        path = await async_capture_still(
-            hass, camera, receiver.options, fresh_only=False
-        )
-        if path is not None:
-            return ShowCameraCommand(
-                title=f"Still preview: {_camera_title(hass, camera)}",
-                url=_absolute_stream_url(hass, path, prefer_external=prefer_remote),
-                duration_seconds=20,
-                enter_pip=True,
-                stream_type=STREAM_TYPE_SNAPSHOT,
-            )
-    return ShowCameraCommand(
-        title="HA TV PiP Plus Test",
-        url=TEST_STREAM_URL,
-        duration_seconds=15,
-        enter_pip=True,
-        stream_type="hls",
-    )
 
 
 def _skipped_for_do_not_disturb(

@@ -171,32 +171,42 @@ def test_flatten_fisheye_makes_a_wide_picture_and_aims() -> None:
     assert brightness("bottom") < 50
 
 
-def test_test_popup_previews_the_first_fisheye_still(
+def test_test_popup_is_the_doorbell_with_a_harmless_button(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_capture(
-        hass: Any, entity: str, options: Any, *, fresh_only: bool = True
-    ) -> str:
-        assert fresh_only is False
-        return f"/still/{entity}"
+    sent: list[Any] = []
 
-    monkeypatch.setattr(services, "async_capture_still", fake_capture)
+    async def fake_show_camera(hass: Any, call: Any) -> None:
+        sent.append(call)
+
+    monkeypatch.setattr(services, "async_handle_show_camera", fake_show_camera)
     monkeypatch.setattr(
         services,
-        "_absolute_stream_url",
-        lambda hass, path, prefer_external=False: f"https://ha{path}",
+        "camera_buttons",
+        lambda hass: {
+            "camera.garage": {"entity_id": "cover.garage"},
+            "camera.front_door": {
+                "entity_id": "lock.front_door",
+                "label": "Unlock Front Door",
+            },
+        },
     )
+    monkeypatch.setattr(services, "default_action_spec", lambda hass, camera: {})
+    monkeypatch.setattr(services, "_ha_device_id_for_entry", lambda hass, e: "dev-1")
     monkeypatch.setattr(services, "_camera_title", lambda hass, entity: "Front door")
-    receiver = _receiver({"still_fisheye_cameras": ["camera.front_door"]})
+    entry = types.SimpleNamespace(title="Den TV", data={"device_id": "tv-1"})
 
-    command = asyncio.run(services._async_test_command(_hass("on"), receiver, False))
+    how = asyncio.run(services.async_send_test_popup(_hass("on"), entry))
 
-    assert command.stream_type == "snapshot"
-    assert command.url == "https://ha/still/camera.front_door"
-    assert command.title == "Still preview: Front door"
-
-    plain = asyncio.run(services._async_test_command(_hass("on"), _receiver({}), False))
-    assert plain.stream_type == "hls"
+    assert how == "doorbell"
+    data = sent[0].data
+    assert sent[0].target == {"device_id": ["dev-1"]}
+    assert data["camera_entity"] == "camera.front_door"
+    assert data["ignore_do_not_disturb"] is True
+    [button] = data["actions"]
+    assert button["label"] == "Unlock Front Door"
+    assert button["icon"] == "unlock"
+    assert button["action"] == "persistent_notification.create"
 
 
 def test_event_picture_used_only_when_recent(monkeypatch: pytest.MonkeyPatch) -> None:

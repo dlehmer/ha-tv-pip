@@ -645,9 +645,13 @@ data:
 ## Testing a TV 🧪
 
 Tick **Send a test popup to this TV after saving** at the bottom of the **Configure**
-page, or press the TV's **Test PiP** button. A 15-second test video pops up. Do not
-disturb is ignored for the test; the TV is turned on only if its turn-on setting allows
-it right now.
+page, or press the TV's **Test PiP** button. If a camera is paired with a door button,
+the test is that camera's live popup with its button (a lock is preferred, so usually
+your doorbell with **Unlock**), exactly as a real ring looks, including turning the TV
+on and the still shown while it wakes. The button is a stand-in: pressing it only posts
+a notification in Home Assistant, so a test never unlocks or opens anything. Without a
+door-button camera, a 15-second test video is shown. Do not disturb is ignored for
+tests.
 
 ## Known Limitations 🚧
 

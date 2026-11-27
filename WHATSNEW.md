@@ -1,5 +1,9 @@
 # What's New ✨
 
+## 1.37.2 - Doorbell Test Popup 🔔
+
+- Test popups show your doorbell with its Unlock button; the test button never unlocks anything 🔔
+
 ## 1.37.1 - Settings Entities Fix 🔧
 
 - Do not disturb, turn-on and still settings now show up as entities 🧩

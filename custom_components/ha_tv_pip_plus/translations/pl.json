@@ -74,7 +74,7 @@
           "send_test_popup": "Send a test popup to this TV after saving"
         },
         "data_description": {
-          "send_test_popup": "A 15-second test video pops up right after you save. Do not disturb is ignored for the test, and the TV is turned on only if your turn-on setting allows it right now."
+          "send_test_popup": "Right after you save, your doorbell camera pops up with its door button, just like a real ring (the TV is turned on if your turn-on setting allows it). The button is only a test: pressing it shows a notification in Home Assistant and never unlocks or opens anything. Do not disturb is ignored for the test. Without a door-button camera, a short test video is shown."
         },
         "sections": {
           "turn_tv_on": {
