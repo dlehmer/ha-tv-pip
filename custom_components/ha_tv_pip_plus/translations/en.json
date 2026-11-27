@@ -76,10 +76,14 @@
           "prefer_remote_transport": "Prefer remote transport",
           "show_advanced_options": "Show advanced settings",
           "edit_camera_buttons": "Set up door buttons for cameras",
-          "edit_popup_appearance": "Customize popups, buttons and updates"
+          "edit_popup_appearance": "Customize popups, buttons and updates",
+          "power_entity": "TV power entity (turn this TV on for popups, then back off)"
         },
         "description": "Set everyday receiver defaults. Advanced popup size, position, and remote receiver credentials are hidden unless needed.",
-        "title": "Receiver defaults"
+        "title": "Receiver defaults",
+        "data_description": {
+          "power_entity": "Optional. A media player or remote that switches this TV on and off, such as the TV's Android TV Remote entity. If the TV is off when a popup comes in, it's turned on first and back off once the popup is gone. Leave empty to never turn the TV on."
+        }
       },
       "advanced": {
         "data": {

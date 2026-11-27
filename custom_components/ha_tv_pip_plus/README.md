@@ -553,6 +553,15 @@ In **Customize popups, buttons and updates**:
   keep playing more quietly. This uses Android audio focus, which Netflix, YouTube, Plex
   and most streaming apps follow; some live-TV apps may ignore it.
 
+## Turning TVs On for Popups 📺
+
+On a TV's **Configure** page, set **TV power entity** to something that switches that
+TV on and off, such as its Android TV Remote `remote.*` or `media_player.*` entity. If
+the TV is off when a popup comes in, Home Assistant turns it on, shows the popup, and
+turns it back off once the popup is gone. A TV that was already on stays on, and so does
+one that someone starts using while the popup is up. Google Cast entities can't report
+whether the TV itself is on, so use the Android TV Remote integration for this.
+
 ## Known Limitations 🚧
 
 - Some Android TV devices reject native PiP for sideloaded apps; the receiver includes an overlay fallback when permission is granted.

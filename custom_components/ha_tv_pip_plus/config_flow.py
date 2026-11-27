@@ -52,6 +52,7 @@ from .const import (
     CONF_NAME,
     CONF_PAIRING,
     CONF_PORT,
+    CONF_POWER_ENTITY,
     CONF_PREFER_REMOTE_TRANSPORT,
     CONF_REMOTE_ACCESS_TOKEN,
     CONF_REMOTE_HOME_ASSISTANT_URL,
@@ -351,6 +352,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
         current_prefer_remote_transport = bool(
             entry.options.get(CONF_PREFER_REMOTE_TRANSPORT, False)
         )
+        current_power_entity = str(entry.options.get(CONF_POWER_ENTITY) or "").strip()
         show_advanced_options = False
         edit_camera_buttons = False
         edit_popup_appearance = False
@@ -370,6 +372,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
             prefer_remote_transport = bool(
                 user_input.get(CONF_PREFER_REMOTE_TRANSPORT, False)
             )
+            power_entity = str(user_input.get(CONF_POWER_ENTITY) or "").strip()
             show_advanced_options = bool(
                 user_input.get(CONF_SHOW_ADVANCED_OPTIONS, False)
             )
@@ -390,6 +393,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                     default_duration=default_duration,
                     default_snapshot_fallback=default_snapshot_fallback,
                     prefer_remote_transport=prefer_remote_transport,
+                    power_entity=power_entity,
                 )
                 if edit_camera_buttons or edit_popup_appearance:
                     self._pending_basic_options = basic_options
@@ -418,7 +422,16 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                 current_duration = default_duration
             current_snapshot_fallback = default_snapshot_fallback
             current_prefer_remote_transport = prefer_remote_transport
+            current_power_entity = power_entity
 
+        power_key = (
+            vol.Optional(
+                CONF_POWER_ENTITY,
+                description={"suggested_value": current_power_entity},
+            )
+            if current_power_entity
+            else vol.Optional(CONF_POWER_ENTITY)
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -439,6 +452,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                         CONF_PREFER_REMOTE_TRANSPORT,
                         default=current_prefer_remote_transport,
                     ): bool,
+                    power_key: _entity_selector(("media_player", "remote")),
                     vol.Optional(
                         CONF_EDIT_CAMERA_BUTTONS,
                         default=edit_camera_buttons,
@@ -871,6 +885,7 @@ def _current_basic_options(entry: Any) -> dict[str, Any]:
         prefer_remote_transport=bool(
             entry.options.get(CONF_PREFER_REMOTE_TRANSPORT, False)
         ),
+        power_entity=str(entry.options.get(CONF_POWER_ENTITY) or "").strip(),
     )
 
 
@@ -880,12 +895,15 @@ def _basic_options(
     default_duration: int,
     default_snapshot_fallback: bool,
     prefer_remote_transport: bool,
+    power_entity: str = "",
 ) -> dict[str, Any]:
     options: dict[str, Any] = {
         CONF_DEFAULT_STREAM_TYPE: default_stream_type,
         CONF_DEFAULT_SNAPSHOT_FALLBACK: default_snapshot_fallback,
         CONF_PREFER_REMOTE_TRANSPORT: prefer_remote_transport,
     }
+    if power_entity:
+        options[CONF_POWER_ENTITY] = power_entity
     if default_duration > 0:
         options[CONF_DEFAULT_DURATION_SECONDS] = default_duration
     return options

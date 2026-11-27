@@ -1,5 +1,11 @@
 # What's New ✨
 
+## 1.36.0 - Updates, Timing, Pause and Power 🔄
+
+- Update TV apps and this integration from Settings > Updates 🔄
+- Set how long popups stay up; pause or quiet what's playing ⏸️
+- Turn a TV on for a popup and back off afterwards 📺
+
 ## 1.35.1 - Matching Button Labels 🏷️
 
 - Lock and Close buttons mirror your custom label: Unlock Front Door becomes Lock Front Door 🔁

@@ -1,0 +1,3 @@
+- Update TV apps and this integration from Settings > Updates 🔄
+- Set how long popups stay up; pause or quiet what's playing ⏸️
+- Turn a TV on for a popup and back off afterwards 📺

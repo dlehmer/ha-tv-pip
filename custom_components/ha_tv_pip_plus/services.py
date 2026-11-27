@@ -64,6 +64,11 @@ from .const import (
     STREAM_TYPE_SNAPSHOT,
     STREAM_TYPES,
 )
+from .power import (
+    async_power_off_after_popup,
+    async_power_on_for_popup,
+    power_entity_for,
+)
 from .remote import remote_registry
 from .restreaming import restreaming_provider_metadata
 
@@ -702,11 +707,15 @@ async def async_handle_show_camera(hass: Any, call: Any) -> None:
         command = _with_overlay_actions(
             hass, call, receiver, command, prefer_external=prefer_external
         )
+        woke_tv = await _async_wake_tv_for_popup(hass, receiver)
         transport = await _async_send_receiver_command(
             receiver,
             remote,
             command,
             prefer_remote=prefer_external,
+        )
+        _schedule_tv_power_off(
+            hass, receiver, remote, command, woke_tv, prefer_remote=prefer_external
         )
         _store_camera_action_result(
             hass,
@@ -813,11 +822,15 @@ async def async_handle_show_snapshot(hass: Any, call: Any) -> None:
         command = _with_overlay_actions(
             hass, call, receiver, command, prefer_external=prefer_external
         )
+        woke_tv = await _async_wake_tv_for_popup(hass, receiver)
         transport = await _async_send_receiver_command(
             receiver,
             remote,
             command,
             prefer_remote=prefer_external,
+        )
+        _schedule_tv_power_off(
+            hass, receiver, remote, command, woke_tv, prefer_remote=prefer_external
         )
         _store_camera_action_result(
             hass,
@@ -905,11 +918,15 @@ async def async_handle_show_notification(hass: Any, call: Any) -> None:
         command = _with_overlay_actions(
             hass, call, receiver, command, prefer_external=prefer_external
         )
+        woke_tv = await _async_wake_tv_for_popup(hass, receiver)
         transport = await _async_send_receiver_command(
             receiver,
             remote,
             command,
             prefer_remote=prefer_external,
+        )
+        _schedule_tv_power_off(
+            hass, receiver, remote, command, woke_tv, prefer_remote=prefer_external
         )
         _store_command_result(
             hass,
@@ -1512,6 +1529,54 @@ def _with_popup_appearance(
         camera_title=_camera_title(hass, request.camera_entity),
         use_popup_duration=not receiver_duration,
     )
+
+
+async def _async_wake_tv_for_popup(
+    hass: Any, receiver: ReceiverEntry
+) -> tuple[str, tuple[Any, ...]] | None:
+    """Turn the TV on through its power entity if it is off (see power.py)."""
+
+    entity_id = power_entity_for(receiver.options)
+    if entity_id is None or getattr(hass, "states", None) is None:
+        return None
+    activity = await async_power_on_for_popup(hass, entity_id)
+    return (entity_id, activity) if activity is not None else None
+
+
+def _schedule_tv_power_off(
+    hass: Any,
+    receiver: ReceiverEntry,
+    remote: Any,
+    command: ShowCameraCommand,
+    woke_tv: tuple[str, tuple[Any, ...]] | None,
+    *,
+    prefer_remote: bool,
+) -> None:
+    """Turn the TV back off once the popup is gone, if we turned it on."""
+
+    if woke_tv is None:
+        return
+    entity_id, activity = woke_tv
+
+    async def _popup_is_showing() -> bool:
+        status, _ = await _async_get_receiver_status_command(
+            receiver, remote, prefer_remote=prefer_remote
+        )
+        return str(status.display_mode) not in ("idle", "unknown")
+
+    coroutine = async_power_off_after_popup(
+        hass,
+        entity_id,
+        activity,
+        first_check_after_s=(command.duration_seconds or 30) + 3,
+        give_up_after_s=popup_appearance(hass)["unlocked_stay_minutes"] * 60,
+        popup_is_showing=_popup_is_showing,
+    )
+    create_task = getattr(hass, "async_create_background_task", None)
+    if callable(create_task):
+        create_task(coroutine, f"ha_tv_pip_plus power off {receiver.name}")
+    else:
+        hass.async_create_task(coroutine)
 
 
 def _with_overlay_actions(

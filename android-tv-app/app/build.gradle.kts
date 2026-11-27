@@ -38,8 +38,8 @@ android {
         applicationId = "com.dlehmer.hatvpipplus"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1035001
-        versionName = "1.35.1"
+        versionCode = 1036000
+        versionName = "1.36.0"
         buildConfigField(
             "boolean",
             "EXPERIMENTAL_OVERLAY_BACKGROUND_BLUR",
