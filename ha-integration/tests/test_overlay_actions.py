@@ -255,3 +255,67 @@ def test_follow_up_mirrors_custom_label() -> None:
     spec = default_action_spec(hass, "camera.front")
     assert spec is not None
     assert spec["follow_up"]["label"] == "Lock Front Door"
+
+
+def _unlock(label: str) -> list[dict[str, object]]:
+    return [{"label": label, "action": "lock.unlock"}]
+
+
+def test_each_popup_keeps_its_own_buttons() -> None:
+    store = PendingActionStore()
+    front = store.replace_for_device(
+        "tv", _unlock("Front"), ttl_seconds=30, popup_key="camera.front", now=0
+    )
+    garage = store.replace_for_device(
+        "tv", _unlock("Garage"), ttl_seconds=30, popup_key="camera.garage", now=1
+    )
+
+    # The garage popup didn't cancel the front door's button.
+    assert store.take(front[0]["id"], "tv", now=2) is not None
+    assert store.take(garage[0]["id"], "tv", now=2) is not None
+
+
+def test_same_camera_replaces_its_buttons_and_oldest_popup_drops_out() -> None:
+    store = PendingActionStore()
+    first = store.replace_for_device(
+        "tv", _unlock("A"), ttl_seconds=30, popup_key="camera.a", now=0
+    )
+    again = store.replace_for_device(
+        "tv", _unlock("A"), ttl_seconds=30, popup_key="camera.a", now=0
+    )
+    assert store.take(first[0]["id"], "tv", now=0) is None
+
+    b = store.replace_for_device(
+        "tv", _unlock("B"), ttl_seconds=30, popup_key="camera.b", now=0
+    )
+    c = store.replace_for_device(
+        "tv", _unlock("C"), ttl_seconds=30, popup_key="camera.c", now=0
+    )
+    d = store.replace_for_device(
+        "tv", _unlock("D"), ttl_seconds=30, popup_key="camera.d", now=0
+    )
+
+    # Only three popups fit: A (the oldest) lost its button.
+    assert store.take(again[0]["id"], "tv", now=0) is None
+    for wire in (b, c, d):
+        assert store.take(wire[0]["id"], "tv", now=0) is not None
+
+
+def test_payload_carries_popup_key_and_dim() -> None:
+    from custom_components.ha_tv_pip_plus.client import (
+        ShowCameraCommand,
+        show_camera_payload,
+    )
+
+    payload = show_camera_payload(
+        ShowCameraCommand(
+            title="Door",
+            url="https://ha/x.m3u8",
+            duration_seconds=30,
+            enter_pip=True,
+            popup_key="camera.front",
+            dim_percent=30,
+        )
+    )
+    assert payload["popupKey"] == "camera.front"
+    assert payload["dimPercent"] == 30

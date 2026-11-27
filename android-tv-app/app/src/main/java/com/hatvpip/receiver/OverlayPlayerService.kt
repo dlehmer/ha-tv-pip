@@ -38,33 +38,14 @@ import org.json.JSONObject
 
 class OverlayPlayerService : Service() {
     private lateinit var windowManager: WindowManager
-    private var overlayView: ViewGroup? = null
-    private var textOverlayView: ViewGroup? = null
-    private var player: ExoPlayer? = null
-    private var errorTextView: TextView? = null
-    private var title: String = ""
-    private var url: String = PlayerActivity.TEST_STREAM_URL
-    private var previewUrl: String? = null
-    private var fallbackUrl: String? = null
-    private var fallbackStreamType: StreamType? = null
-    private var showNotification: Boolean = false
-    private var muted: Boolean = true
-    private var message: String? = null
-    private var style: NotificationStyle = NotificationStyle()
-    private var streamType: StreamType = StreamType.Hls
-    private var durationSeconds: Int? = null
-    private var actions: List<OverlayAction> = emptyList()
-    private var actionCallbackUrl: String? = null
-    private var actionInFlight: Boolean = false
-    private val actionButtons = mutableListOf<ActionButton>()
-    private var buttonStyle: ButtonStyle = ButtonStyle()
-    private var mediaFocus: String = MEDIA_FOCUS_NONE
+    /** Popups on screen, oldest first. */
+    private val popups = mutableListOf<Popup>()
     private var audioFocusRequest: AudioFocusRequest? = null
     private var mutedMediaForPopup = false
-    @Volatile private var mjpegRunning: Boolean = false
-    private var mjpegThread: Thread? = null
-    private val autoCloseHandler = Handler(Looper.getMainLooper())
-    private val mainHandler = Handler(Looper.getMainLooper())
+    /** Full-screen dark layer behind the popups, so the picture draws the eye. */
+    private var dimView: View? = null
+    private var closingAll = false
+    private val serviceHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -73,653 +54,958 @@ class OverlayPlayerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> stopSelf()
-            else -> {
-                title = intent?.getStringExtra(PlayerActivity.EXTRA_TITLE) ?: title
-                url = intent?.getStringExtra(PlayerActivity.EXTRA_URL) ?: url
-                previewUrl = intent?.getStringExtra(PlayerActivity.EXTRA_PREVIEW_URL)
-                fallbackUrl = intent?.getStringExtra(PlayerActivity.EXTRA_FALLBACK_URL)
-                fallbackStreamType = when (
-                    intent?.getStringExtra(PlayerActivity.EXTRA_FALLBACK_STREAM_TYPE)
-                ) {
-                    StreamType.Hls.wireName -> StreamType.Hls
-                    StreamType.Mjpeg.wireName -> StreamType.Mjpeg
-                    StreamType.Snapshot.wireName -> StreamType.Snapshot
-                    else -> null
-                }
-                showNotification = intent?.getBooleanExtra(
-                    PlayerActivity.EXTRA_SHOW_NOTIFICATION,
-                    false
-                ) ?: false
-                muted = intent?.getBooleanExtra(PlayerActivity.EXTRA_MUTED, true) ?: true
-                message = intent?.getStringExtra(PlayerActivity.EXTRA_MESSAGE)
-                style = NotificationStyle(
-                    position = NotificationPosition.fromWire(
-                        intent?.getStringExtra(PlayerActivity.EXTRA_POSITION)
-                            ?: NotificationPosition.TopRight.wireName
-                    ),
-                    titleColor = intent?.getStringExtra(PlayerActivity.EXTRA_TITLE_COLOR) ?: "#50BFF2",
-                    titleSize = intent?.getIntExtra(PlayerActivity.EXTRA_TITLE_SIZE, 24)?.coerceIn(10, 48) ?: 24,
-                    messageColor = intent?.getStringExtra(PlayerActivity.EXTRA_MESSAGE_COLOR) ?: "#fbf5f5",
-                    messageSize = intent?.getIntExtra(PlayerActivity.EXTRA_MESSAGE_SIZE, 18)?.coerceIn(10, 40) ?: 18,
-                    backgroundColor = intent?.getStringExtra(PlayerActivity.EXTRA_BACKGROUND_COLOR) ?: DEFAULT_BACKGROUND_COLOR,
-                    textOverlay = intent?.getBooleanExtra(PlayerActivity.EXTRA_TEXT_OVERLAY, false) ?: false,
-                    width = intent?.takeIf {
-                        it.hasExtra(PlayerActivity.EXTRA_WIDTH)
-                    }?.getIntExtra(PlayerActivity.EXTRA_WIDTH, 0)?.takeIf { it > 0 },
-                    height = intent?.takeIf {
-                        it.hasExtra(PlayerActivity.EXTRA_HEIGHT)
-                    }?.getIntExtra(PlayerActivity.EXTRA_HEIGHT, 0)?.takeIf { it > 0 }
-                )
-                streamType = when (intent?.getStringExtra(PlayerActivity.EXTRA_STREAM_TYPE)) {
-                    StreamType.Mjpeg.wireName -> StreamType.Mjpeg
-                    StreamType.Snapshot.wireName -> StreamType.Snapshot
-                    StreamType.Notification.wireName -> StreamType.Notification
-                    else -> StreamType.Hls
-                }
-                durationSeconds = intent?.takeIf {
-                    it.hasExtra(PlayerActivity.EXTRA_DURATION_SECONDS)
-                }?.getIntExtra(PlayerActivity.EXTRA_DURATION_SECONDS, 0)?.takeIf { it > 0 }
-                actionCallbackUrl = intent?.getStringExtra(PlayerActivity.EXTRA_ACTION_CALLBACK_URL)
-                actions = if (actionCallbackUrl != null) {
-                    OverlayAction.listFromJsonString(
-                        intent?.getStringExtra(PlayerActivity.EXTRA_ACTIONS_JSON)
-                    )
-                } else {
-                    emptyList()
-                }
-                buttonStyle = ButtonStyle.fromJsonString(
-                    intent?.getStringExtra(PlayerActivity.EXTRA_BUTTON_STYLE_JSON)
-                )
-                mediaFocus = mediaFocusFrom(intent?.getStringExtra(PlayerActivity.EXTRA_MEDIA_FOCUS))
-                actionInFlight = false
-                showOverlay()
+            ACTION_STOP -> closeAll()
+            ACTION_CLOSE_POPUP -> {
+                val key = intent?.getStringExtra(PlayerActivity.EXTRA_POPUP_KEY)
+                val popup = popups.firstOrNull { key != null && it.key == key }
+                if (popup != null) closePopup(popup) else if (key == null) closeAll()
             }
+            else -> showPopup(Popup(intent))
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        autoCloseHandler.removeCallbacksAndMessages(null)
-        removeOverlay()
+        serviceHandler.removeCallbacksAndMessages(null)
+        popups.toList().forEach { it.remove() }
+        popups.clear()
+        removeDim()
+        abandonMediaFocus()
+        ReceiverRuntimeState.markIdle()
+        AppLog.playbackStop(reason = "overlay_service_stopped")
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun showOverlay() {
-        if (overlayView != null) {
-            removeOverlay()
+    /**
+     * Show a popup next to any already up. The same camera again replaces its own popup;
+     * past [MAX_POPUPS], the oldest one closes to make room.
+     */
+    private fun showPopup(popup: Popup) {
+        closingAll = false
+        // A new popup arriving during a fade-out keeps playback paused.
+        serviceHandler.removeCallbacksAndMessages(null)
+        // A camera filling the screen shrinks back so the new one can be seen.
+        popups.firstOrNull { it.expanded }?.setExpanded(false)
+        val sameCamera = popup.key?.let { key -> popups.firstOrNull { it.key == key } }
+        if (sameCamera != null) {
+            popup.slot = sameCamera.slot
+            removePopup(sameCamera)
+        } else {
+            while (popups.size >= MAX_POPUPS) {
+                removePopup(popups.first())
+            }
+            popup.slot = (0 until MAX_POPUPS).first { slot -> popups.none { it.slot == slot } }
         }
-
-        if (
-            streamType != StreamType.Notification &&
-            showNotification &&
-            !style.textOverlay &&
-            actions.isEmpty()
-        ) {
-            showMediaWithFooterOverlay()
+        popup.compact = popups.isNotEmpty() || popup.slot > 0
+        // The dark layer goes in first so it sits underneath every popup.
+        showDim(popup.dimPercent)
+        popups += popup
+        if (!popup.show()) {
+            popups.remove(popup)
+            if (popups.isEmpty()) {
+                removeDim()
+                stopSelf()
+            }
             return
         }
-
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = roundedBackground()
-            // Overlay video uses a texture-backed PlayerView so the outer outline can clip
-            // the whole notification into a single rounded glass container.
-            clipToOutline = true
+        requestMediaFocus(popup.mediaFocus)
+        if (popup.actions.isNotEmpty()) {
+            focusPopup(popup)
         }
-        if (streamType == StreamType.Notification) {
-            addNotificationContent(root, fillHeight = style.height != null)
-        } else {
-            val mediaContainer = FrameLayout(this).apply {
-                setBackgroundColor(Color.BLACK)
-                layoutParams = mediaLayoutParams()
-            }
-            if (streamType == StreamType.Snapshot) {
-                addSnapshotView(mediaContainer, url, updateStateOnLoad = true)
-            } else if (streamType == StreamType.Mjpeg) {
-                addMjpegView(mediaContainer)
+    }
+
+    /**
+     * Fade one popup out and close it. When it's the last one, the dark layer fades with
+     * it, and what was playing resumes [RESUME_BEFORE_FADE_END_MS] before the fade ends.
+     */
+    private fun closePopup(popup: Popup) {
+        if (popup !in popups || popup.closing) return
+        if (popup.expanded) onPopupExpanded(popup, false)
+        val isLast = popups.none { it !== popup && !it.closing }
+        if (isLast) {
+            fadeOutDim()
+            serviceHandler.postDelayed(
+                { abandonMediaFocus() },
+                (FADE_OUT_MS - RESUME_BEFORE_FADE_END_MS).coerceAtLeast(0L)
+            )
+        }
+        popup.fadeOut {
+            removePopup(popup)
+            if (popups.isEmpty()) {
+                removeDim()
+                stopSelf()
             } else {
-                addPlayerView(mediaContainer)
+                popups.lastOrNull { it.actions.isNotEmpty() && !it.closing }?.let { focusPopup(it) }
             }
-
-            if (showNotification && style.textOverlay) {
-                addNotificationOverlay(mediaContainer)
-            }
-            errorTextView = buildErrorTextView()
-            mediaContainer.addView(errorTextView)
-
-            root.addView(mediaContainer)
-
-            if (showNotification && !style.textOverlay) {
-                addNotificationContent(root, fillHeight = false)
-            }
-        }
-        if (actions.isNotEmpty()) {
-            root.addView(buildActionBar())
-        }
-
-        val params = overlayLayoutParams(overlayHeight(), OVERLAY_MARGIN_PX)
-        if (actions.isNotEmpty()) {
-            // Take D-pad focus so the remote drives the buttons. The window gives focus back
-            // to the app underneath as soon as it is removed (Back, timeout, or after an action).
-            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
-        }
-        if (streamType == StreamType.Notification) {
-            applyBackgroundBlur(params)
-        }
-
-        runCatching {
-            windowManager.addView(root, params)
-            overlayView = root
-            requestMediaFocus()
-            actionButtons.firstOrNull()?.root?.let { button -> button.post { button.requestFocus() } }
-            updatePlaybackState(
-                status = if (streamType == StreamType.Notification) PlaybackStatus.Ready else PlaybackStatus.Buffering,
-                isPlaying = false,
-                errorMessage = null
-            )
-            AppLog.playbackStart(url)
-            scheduleAutoClose()
-        }.onFailure { error ->
-            AppLog.error("Unable to show overlay fallback", error)
-            player?.release()
-            player = null
-            stopSelf()
         }
     }
 
-    private fun showMediaWithFooterOverlay() {
-        val mediaRoot = FrameLayout(this).apply {
-            background = roundedBackground()
-            clipToOutline = true
-        }
-        if (streamType == StreamType.Snapshot) {
-            addSnapshotView(mediaRoot, url, updateStateOnLoad = true)
-        } else if (streamType == StreamType.Mjpeg) {
-            addMjpegView(mediaRoot)
-        } else {
-            addPlayerView(mediaRoot)
-        }
-        errorTextView = buildErrorTextView()
-        mediaRoot.addView(errorTextView)
-
-        val footer = buildNotificationContent(fillHeight = false).apply {
-            background = glassTextBackground()
-        }
-        val footerHeight = measureFooterHeight(footer)
-        val mediaHeight = style.height
-            ?.let { (it - footerHeight).coerceAtLeast(MIN_MEDIA_HEIGHT_PX) }
-            ?: OVERLAY_HEIGHT_PX
-        val mediaYOffset = if (isBottomPosition()) {
-            OVERLAY_MARGIN_PX + footerHeight
-        } else {
-            OVERLAY_MARGIN_PX
-        }
-        val footerYOffset = if (isBottomPosition()) {
-            OVERLAY_MARGIN_PX
-        } else {
-            OVERLAY_MARGIN_PX + mediaHeight
-        }
-        val mediaParams = overlayLayoutParams(mediaHeight, mediaYOffset)
-        val footerParams = overlayLayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            footerYOffset
-        )
-        applyBackgroundBlur(footerParams)
-
-        runCatching {
-            windowManager.addView(mediaRoot, mediaParams)
-            overlayView = mediaRoot
-            requestMediaFocus()
-            windowManager.addView(footer, footerParams)
-            textOverlayView = footer
-            updatePlaybackState(
-                status = if (streamType == StreamType.Notification) PlaybackStatus.Ready else PlaybackStatus.Buffering,
-                isPlaying = false,
-                errorMessage = null
-            )
-            AppLog.playbackStart(url)
-            scheduleAutoClose()
-        }.onFailure { error ->
-            AppLog.error("Unable to show overlay fallback", error)
-            runCatching { windowManager.removeView(mediaRoot) }
-            runCatching { windowManager.removeView(footer) }
-            player?.release()
-            player = null
+    /** Fade everything out, then stop. */
+    private fun closeAll() {
+        if (closingAll) return
+        if (popups.isEmpty()) {
             stopSelf()
+            return
         }
+        closingAll = true
+        popups.toList().forEach { closePopup(it) }
     }
 
-    private fun overlayLayoutParams(height: Int, yOffset: Int): WindowManager.LayoutParams =
-        WindowManager.LayoutParams(
-            overlayWidth(),
-            height,
+    private fun showDim(percent: Int) {
+        val dimAlpha = (percent.coerceIn(0, MAX_DIM_PERCENT) * 255 / 100)
+        dimView?.let { existing ->
+            existing.animate().cancel()
+            existing.setBackgroundColor(Color.argb(dimAlpha, 0, 0, 0))
+            existing.alpha = 1f
+            return
+        }
+        if (dimAlpha == 0) return
+        val view = View(this).apply {
+            setBackgroundColor(Color.argb(dimAlpha, 0, 0, 0))
+            this.alpha = 0f
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = overlayGravity()
-            x = OVERLAY_MARGIN_PX
-            y = yOffset
-        }
-
-    private fun measureFooterHeight(footer: View): Int {
-        footer.measure(
-            View.MeasureSpec.makeMeasureSpec(overlayWidth(), View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
-        return footer.measuredHeight.coerceAtLeast(MIN_FOOTER_HEIGHT_PX)
+        runCatching { windowManager.addView(view, params) }
+            .onSuccess {
+                dimView = view
+                view.animate().alpha(1f).setDuration(FADE_IN_MS).start()
+            }
+            .onFailure { AppLog.error("Could not dim the screen behind the popup", it) }
     }
 
-    private fun roundedBackground(): GradientDrawable =
-        GradientDrawable().apply {
-            setColor(parseColorOrDefault(style.backgroundColor, DEFAULT_BACKGROUND_COLOR_INT))
-            cornerRadius = NOTIFICATION_CORNER_RADIUS_PX
-        }
-
-    private fun applyBackgroundBlur(params: WindowManager.LayoutParams) {
-        if (!BuildConfig.EXPERIMENTAL_OVERLAY_BACKGROUND_BLUR) {
-            return
-        }
-
-        val backgroundColor = parseColorOrDefault(
-            style.backgroundColor,
-            DEFAULT_BACKGROUND_COLOR_INT
-        )
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || Color.alpha(backgroundColor) == 255) {
-            return
-        }
-
-        // Android applies this at the window level, so opaque video/image pixels are not
-        // needlessly blurred. The effect is only visible through the translucent glass areas.
-        params.flags = params.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-        params.blurBehindRadius = OVERLAY_BACKGROUND_BLUR_RADIUS_PX
+    private fun fadeOutDim() {
+        dimView?.animate()?.alpha(0f)?.setDuration(FADE_OUT_MS)?.start()
     }
 
-    private fun buildErrorTextView(): TextView =
-        TextView(this).apply {
-            setTextColor(Color.WHITE)
-            setBackgroundColor(0xCC000000.toInt())
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setPadding(16, 12, 16, 12)
-            visibility = TextView.GONE
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM
-            )
+    private fun removeDim() {
+        dimView?.let { view ->
+            view.animate().cancel()
+            runCatching { windowManager.removeView(view) }
         }
+        dimView = null
+    }
 
-    /** One door button: an optional round icon badge and a label, drawn per [buttonStyle]. */
-    private inner class ActionButton(
-        val root: LinearLayout,
-        private val badge: TextView,
-        private val label: TextView
-    ) {
-        var action: OverlayAction? = null
+    /** While one popup fills the screen, the others step out of the way. */
+    private fun onPopupExpanded(popup: Popup, expanded: Boolean) {
+        popups.filter { it !== popup }.forEach { other ->
+            other.setHidden(expanded)
+        }
+    }
+
+    private fun removePopup(popup: Popup) {
+        popup.remove()
+        popups.remove(popup)
+    }
+
+    /**
+     * Give the remote to [target]'s buttons. Only one popup window is focusable at a time,
+     * so Left/Right at the edge of its buttons moves to the popup beside it.
+     */
+    private fun focusPopup(target: Popup) {
+        popups.filter { it.actions.isNotEmpty() }.forEach { popup ->
+            val view = popup.overlayView ?: return@forEach
+            val params = popup.mediaParams ?: return@forEach
+            val notFocusable = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            params.flags = if (popup === target) {
+                params.flags and notFocusable.inv()
+            } else {
+                params.flags or notFocusable
+            }
+            runCatching { windowManager.updateViewLayout(view, params) }
+        }
+        target.focusTarget()?.let { view -> view.post { view.requestFocus() } }
+    }
+
+    /** The popup with buttons beside [from] on screen, to the left or right. */
+    private fun neighbourPopup(from: Popup, toLeft: Boolean): Popup? {
+        val screenWidth = resources.displayMetrics.widthPixels
+        fun left(popup: Popup): Int =
+            if ((popup.overlayGravity() and Gravity.END) == Gravity.END) {
+                screenWidth - popup.slotX() - popup.overlayWidth()
+            } else {
+                popup.slotX()
+            }
+        val mine = left(from)
+        val candidates = popups.filter { it !== from && it.actions.isNotEmpty() }
+        return if (toLeft) {
+            candidates.filter { left(it) < mine }.maxByOrNull { left(it) }
+        } else {
+            candidates.filter { left(it) > mine }.minByOrNull { left(it) }
+        }
+    }
+
+    /**
+     * One popup: its own windows, video, buttons and timer. Up to [MAX_POPUPS] are shown
+     * side by side; see [showPopup].
+     */
+    private inner class Popup(intent: Intent?) {
+        private val ctx: OverlayPlayerService get() = this@OverlayPlayerService
+        val key: String? = intent?.getStringExtra(PlayerActivity.EXTRA_POPUP_KEY)
+        var slot: Int = 0
+        /** Opened next to other popups: smaller, so up to three fit across the screen. */
+        var compact: Boolean = false
+        var overlayView: ViewGroup? = null
+        private var textOverlayView: ViewGroup? = null
+        var mediaParams: WindowManager.LayoutParams? = null
+        private var player: ExoPlayer? = null
+        private var errorTextView: TextView? = null
+        private var title: String = intent?.getStringExtra(PlayerActivity.EXTRA_TITLE) ?: ""
+        private var url: String = intent?.getStringExtra(PlayerActivity.EXTRA_URL) ?: PlayerActivity.TEST_STREAM_URL
+        private val previewUrl: String? = intent?.getStringExtra(PlayerActivity.EXTRA_PREVIEW_URL)
+        private val fallbackUrl: String? = intent?.getStringExtra(PlayerActivity.EXTRA_FALLBACK_URL)
+        private val fallbackStreamType: StreamType? = when (
+            intent?.getStringExtra(PlayerActivity.EXTRA_FALLBACK_STREAM_TYPE)
+        ) {
+            StreamType.Hls.wireName -> StreamType.Hls
+            StreamType.Mjpeg.wireName -> StreamType.Mjpeg
+            StreamType.Snapshot.wireName -> StreamType.Snapshot
+            else -> null
+        }
+        private val showNotification: Boolean =
+            intent?.getBooleanExtra(PlayerActivity.EXTRA_SHOW_NOTIFICATION, false) ?: false
+        private val muted: Boolean = intent?.getBooleanExtra(PlayerActivity.EXTRA_MUTED, true) ?: true
+        private val message: String? = intent?.getStringExtra(PlayerActivity.EXTRA_MESSAGE)
+        val style: NotificationStyle = NotificationStyle(
+            position = NotificationPosition.fromWire(
+                intent?.getStringExtra(PlayerActivity.EXTRA_POSITION)
+                    ?: NotificationPosition.TopRight.wireName
+            ),
+            titleColor = intent?.getStringExtra(PlayerActivity.EXTRA_TITLE_COLOR) ?: "#50BFF2",
+            titleSize = intent?.getIntExtra(PlayerActivity.EXTRA_TITLE_SIZE, 24)?.coerceIn(10, 48) ?: 24,
+            messageColor = intent?.getStringExtra(PlayerActivity.EXTRA_MESSAGE_COLOR) ?: "#fbf5f5",
+            messageSize = intent?.getIntExtra(PlayerActivity.EXTRA_MESSAGE_SIZE, 18)?.coerceIn(10, 40) ?: 18,
+            backgroundColor = intent?.getStringExtra(PlayerActivity.EXTRA_BACKGROUND_COLOR) ?: DEFAULT_BACKGROUND_COLOR,
+            textOverlay = intent?.getBooleanExtra(PlayerActivity.EXTRA_TEXT_OVERLAY, false) ?: false,
+            width = intent?.takeIf {
+                it.hasExtra(PlayerActivity.EXTRA_WIDTH)
+            }?.getIntExtra(PlayerActivity.EXTRA_WIDTH, 0)?.takeIf { it > 0 },
+            height = intent?.takeIf {
+                it.hasExtra(PlayerActivity.EXTRA_HEIGHT)
+            }?.getIntExtra(PlayerActivity.EXTRA_HEIGHT, 0)?.takeIf { it > 0 }
+        )
+        private var streamType: StreamType = when (intent?.getStringExtra(PlayerActivity.EXTRA_STREAM_TYPE)) {
+            StreamType.Mjpeg.wireName -> StreamType.Mjpeg
+            StreamType.Snapshot.wireName -> StreamType.Snapshot
+            StreamType.Notification.wireName -> StreamType.Notification
+            else -> StreamType.Hls
+        }
+        private val durationSeconds: Int? = intent?.takeIf {
+            it.hasExtra(PlayerActivity.EXTRA_DURATION_SECONDS)
+        }?.getIntExtra(PlayerActivity.EXTRA_DURATION_SECONDS, 0)?.takeIf { it > 0 }
+        private val actionCallbackUrl: String? =
+            intent?.getStringExtra(PlayerActivity.EXTRA_ACTION_CALLBACK_URL)
+        val actions: List<OverlayAction> = if (actionCallbackUrl != null) {
+            OverlayAction.listFromJsonString(intent?.getStringExtra(PlayerActivity.EXTRA_ACTIONS_JSON))
+        } else {
+            emptyList()
+        }
+        private val buttonStyle: ButtonStyle =
+            ButtonStyle.fromJsonString(intent?.getStringExtra(PlayerActivity.EXTRA_BUTTON_STYLE_JSON))
+        val mediaFocus: String = mediaFocusFrom(intent?.getStringExtra(PlayerActivity.EXTRA_MEDIA_FOCUS))
+        val dimPercent: Int = intent?.getIntExtra(PlayerActivity.EXTRA_DIM_PERCENT, 0) ?: 0
+        /** Filling the whole screen (OK on the video toggles it). */
+        var expanded: Boolean = false
             private set
+        var closing: Boolean = false
+            private set
+        private var mediaContainerView: FrameLayout? = null
+        private var normalParams: WindowManager.LayoutParams? = null
+        private var actionInFlight: Boolean = false
+        val actionButtons = mutableListOf<ActionButton>()
+        @Volatile private var mjpegRunning: Boolean = false
+        private var mjpegThread: Thread? = null
+        private val autoCloseHandler = Handler(Looper.getMainLooper())
+        private val mainHandler = Handler(Looper.getMainLooper())
 
-        fun show(next: OverlayAction) {
-            action = next
-            label.text = next.label
-            val glyph = iconGlyph(next.icon)
-            badge.text = glyph.orEmpty()
-            badge.visibility = if (buttonStyle.showIcon && glyph != null) View.VISIBLE else View.GONE
-        }
-
-        fun setLabel(text: String) {
-            label.text = text
-        }
-    }
-
-    private fun buildActionBar(): LinearLayout {
-        actionButtons.clear()
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX)
-            background = glassTextBackground()
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        }
-        actions.forEachIndexed { index, action ->
-            val button = buildActionButton(index)
-            button.show(action)
-            button.root.setOnClickListener { onActionPressed(button) }
-            actionButtons += button
-            bar.addView(button.root)
-        }
-        return bar
-    }
-
-    private fun buildActionButton(index: Int): ActionButton {
-        val style = buttonStyle
-        val accent = parseColorOrDefault(style.accentColor, DEFAULT_ACCENT_COLOR)
-        val textColor = parseColorOrDefault(style.textColor, Color.WHITE)
-        val badge = TextView(this).apply {
-            gravity = Gravity.CENTER
-            textSize = style.textSize.toFloat()
-            includeFontPadding = false
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(withAlpha(accent, BADGE_ALPHA))
+        /** Adds this popup's windows. Returns false if Android refused them. */
+        fun show(): Boolean {
+            if (
+                streamType != StreamType.Notification &&
+                showNotification &&
+                !style.textOverlay &&
+                actions.isEmpty()
+            ) {
+                return showMediaWithFooterOverlay()
             }
-            layoutParams = LinearLayout.LayoutParams(BADGE_SIZE_PX, BADGE_SIZE_PX).apply {
-                marginEnd = BADGE_GAP_PX
+
+            val root = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                background = roundedBackground()
+                // Overlay video uses a texture-backed PlayerView so the outer outline can clip
+                // the whole notification into a single rounded glass container.
+                clipToOutline = true
             }
-        }
-        val label = TextView(this).apply {
-            setTextColor(textColor)
-            textSize = style.textSize.toFloat()
-            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            includeFontPadding = false
-        }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = if (style.shape == "tile") Gravity.CENTER_VERTICAL or Gravity.START else Gravity.CENTER
-            setPadding(ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX, ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX)
-            background = actionButtonBackground(style, accent)
-            isFocusable = true
-            isFocusableInTouchMode = true
-            isClickable = true
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                if (index > 0) marginStart = ACTION_BUTTON_GAP_PX
-            }
-            addView(badge)
-            addView(label)
-            setOnKeyListener { _, keyCode, event ->
-                if (keyCode == KeyEvent.KEYCODE_BACK) {
-                    if (event.action == KeyEvent.ACTION_UP) {
-                        AppLog.playbackStop(reason = "overlay_back_pressed")
-                        stopSelf()
-                    }
-                    true
+            if (streamType == StreamType.Notification) {
+                addNotificationContent(root, fillHeight = style.height != null)
+            } else {
+                val mediaContainer = FrameLayout(ctx).apply {
+                    setBackgroundColor(Color.BLACK)
+                    layoutParams = mediaLayoutParams()
+                }
+                mediaContainerView = mediaContainer
+                if (actions.isNotEmpty()) {
+                    makeVideoSelectable(mediaContainer)
+                }
+                if (streamType == StreamType.Snapshot) {
+                    addSnapshotView(mediaContainer, url, updateStateOnLoad = true)
+                } else if (streamType == StreamType.Mjpeg) {
+                    addMjpegView(mediaContainer)
                 } else {
-                    false
+                    addPlayerView(mediaContainer)
+                }
+
+                if (showNotification && style.textOverlay) {
+                    addNotificationOverlay(mediaContainer)
+                }
+                errorTextView = buildErrorTextView()
+                mediaContainer.addView(errorTextView)
+
+                root.addView(mediaContainer)
+
+                if (showNotification && !style.textOverlay) {
+                    addNotificationContent(root, fillHeight = false)
                 }
             }
-            setOnFocusChangeListener { view, hasFocus ->
-                view.animate().scaleX(if (hasFocus) 1.04f else 1f)
-                    .scaleY(if (hasFocus) 1.04f else 1f)
-                    .setDuration(120)
-                    .start()
+            if (actions.isNotEmpty()) {
+                root.addView(buildActionBar())
             }
-        }
-        return ActionButton(root, badge, label)
-    }
 
-    private var armedActionId: String? = null
-
-    private fun onActionPressed(button: ActionButton) {
-        val action = button.action ?: return
-        if (actionInFlight) return
-        if (action.confirm && armedActionId != action.id) {
-            armedActionId = action.id
-            button.setLabel(action.confirmLabel ?: getString(R.string.overlay_action_confirm))
-            mainHandler.postDelayed({
-                if (armedActionId == action.id && !actionInFlight) {
-                    armedActionId = null
-                    button.setLabel(action.label)
-                }
-            }, ACTION_CONFIRM_WINDOW_MS)
-            return
-        }
-        armedActionId = null
-        runAction(button, action)
-    }
-
-    private fun runAction(button: ActionButton, action: OverlayAction) {
-        val callbackUrl = actionCallbackUrl ?: return
-        actionInFlight = true
-        // Don't let the popup time out underneath a request that is still running.
-        autoCloseHandler.removeCallbacksAndMessages(null)
-        button.setLabel(getString(R.string.overlay_action_working))
-        Thread {
-            val result = runCatching { postAction(callbackUrl, action.id) }
-            mainHandler.post {
-                actionInFlight = false
-                if (overlayView == null) return@post
-                result.onSuccess { response ->
-                    AppLog.lifecycleEvent("overlay_action_succeeded", action.label)
-                    val next = response.optJSONObject("next")?.let { json ->
-                        OverlayAction.listFromJsonString(org.json.JSONArray().put(json).toString())
-                            .firstOrNull()
-                    }
-                    if (next != null) {
-                        // Door unlocked / garage opened: keep the video up and offer
-                        // Lock / Close. Home Assistant closes the popup once secured.
-                        button.show(next)
-                        val staySeconds = response.optLong("stayOpenSeconds", 0L)
-                        val stayMillis = if (staySeconds > 0) staySeconds * 1_000L else FOLLOW_UP_CLOSE_DELAY_MS
-                        autoCloseHandler.postDelayed({ stopSelf() }, stayMillis)
-                    } else {
-                        button.setLabel(getString(R.string.overlay_action_done))
-                        autoCloseHandler.postDelayed({ stopSelf() }, ACTION_SUCCESS_CLOSE_DELAY_MS)
-                    }
-                }.onFailure { error ->
-                    AppLog.error("Overlay action failed: ${action.label}", error)
-                    button.setLabel(getString(R.string.overlay_action_failed))
-                    mainHandler.postDelayed({
-                        if (overlayView != null && !actionInFlight) button.setLabel(action.label)
-                    }, ACTION_FAILED_RESET_MS)
-                    autoCloseHandler.postDelayed({ stopSelf() }, ACTION_FAILED_CLOSE_DELAY_MS)
-                }
+            val params = overlayLayoutParams(overlayHeight(), OVERLAY_MARGIN_PX)
+            // Buttons take D-pad focus, but only one popup at a time: the service decides
+            // which (see focusPopup). Focus returns to the app underneath once it closes.
+            mediaParams = params
+            if (streamType == StreamType.Notification) {
+                applyBackgroundBlur(params)
             }
-        }.start()
-    }
 
-    private fun postAction(callbackUrl: String, actionId: String): JSONObject {
-        val token = PairingState.pairedToken(applicationContext)
-            ?: throw IOException("Receiver is not paired")
-        val body = JSONObject()
-            .put("deviceId", ReceiverDeviceInfo.stableDeviceId(applicationContext))
-            .put("actionId", actionId)
-            .toString()
-            .toByteArray(Charsets.UTF_8)
-        val connection = (URL(callbackUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = ACTION_TIMEOUT_MS
-            readTimeout = ACTION_TIMEOUT_MS
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Authorization", "Bearer $token")
+            return runCatching {
+                root.alpha = 0f
+                windowManager.addView(root, params)
+                overlayView = root
+                root.animate().alpha(1f).setDuration(FADE_IN_MS).start()
+                updatePlaybackState(
+                    status = if (streamType == StreamType.Notification) PlaybackStatus.Ready else PlaybackStatus.Buffering,
+                    isPlaying = false,
+                    errorMessage = null
+                )
+                AppLog.playbackStart(url)
+                scheduleAutoClose()
+            }.onFailure { error ->
+                AppLog.error("Unable to show overlay fallback", error)
+                player?.release()
+                player = null
+            }.isSuccess
         }
-        try {
-            connection.outputStream.use { it.write(body) }
-            val status = connection.responseCode
-            if (status !in 200..299) {
-                val detail = runCatching {
-                    connection.errorStream?.bufferedReader()?.use { it.readText() }
-                        ?.let { JSONObject(it).optString("error") }
-                }.getOrNull()
-                throw IOException("Home Assistant returned HTTP $status${detail?.let { ": $it" } ?: ""}")
+
+        private fun showMediaWithFooterOverlay(): Boolean {
+            val mediaRoot = FrameLayout(ctx).apply {
+                background = roundedBackground()
+                clipToOutline = true
             }
-            val text = connection.inputStream.bufferedReader().use { it.readText() }
-            return runCatching { JSONObject(text) }.getOrDefault(JSONObject())
-        } finally {
-            connection.disconnect()
-        }
-    }
+            if (streamType == StreamType.Snapshot) {
+                addSnapshotView(mediaRoot, url, updateStateOnLoad = true)
+            } else if (streamType == StreamType.Mjpeg) {
+                addMjpegView(mediaRoot)
+            } else {
+                addPlayerView(mediaRoot)
+            }
+            errorTextView = buildErrorTextView()
+            mediaRoot.addView(errorTextView)
 
-    private fun actionButtonBackground(style: ButtonStyle, accent: Int): StateListDrawable {
-        val fill = parseColorOrDefault(style.backgroundColor, DEFAULT_BUTTON_COLOR)
-        val radius = when (style.shape) {
-            "pill" -> PILL_RADIUS_PX
-            "square" -> 0f
-            else -> style.cornerRadius.toFloat()
-        }
-        return StateListDrawable().apply {
-            addState(
-                intArrayOf(android.R.attr.state_focused),
-                GradientDrawable().apply {
-                    setColor(fill)
-                    cornerRadius = radius
-                    setStroke(ACTION_FOCUSED_STROKE_PX, accent)
-                }
-            )
-            addState(
-                intArrayOf(),
-                GradientDrawable().apply {
-                    setColor(fill)
-                    cornerRadius = radius
-                    setStroke(1, IDLE_OUTLINE_COLOR)
-                }
-            )
-        }
-    }
-
-    private fun withAlpha(color: Int, alpha: Int): Int =
-        Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
-
-    private fun addNotificationContent(root: LinearLayout, fillHeight: Boolean) {
-        root.addView(
-            buildNotificationContent(fillHeight).apply {
+            val footer = buildNotificationContent(fillHeight = false).apply {
                 background = glassTextBackground()
             }
-        )
-    }
-
-    private fun addNotificationOverlay(root: FrameLayout) {
-        val content = buildNotificationContent(fillHeight = false).apply {
-            setBackgroundColor(parseColorOrDefault(style.backgroundColor, DEFAULT_BACKGROUND_COLOR_INT))
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM
+            val footerHeight = measureFooterHeight(footer)
+            val mediaHeight = style.height
+                ?.let { (it - footerHeight).coerceAtLeast(MIN_MEDIA_HEIGHT_PX) }
+                ?: mediaHeightPx()
+            val mediaYOffset = if (isBottomPosition()) {
+                OVERLAY_MARGIN_PX + footerHeight
+            } else {
+                OVERLAY_MARGIN_PX
+            }
+            val footerYOffset = if (isBottomPosition()) {
+                OVERLAY_MARGIN_PX
+            } else {
+                OVERLAY_MARGIN_PX + mediaHeight
+            }
+            val mediaParams = overlayLayoutParams(mediaHeight, mediaYOffset)
+            val footerParams = overlayLayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                footerYOffset
             )
-        }
-        root.addView(content)
-    }
+            applyBackgroundBlur(footerParams)
 
-    private fun glassTextBackground(): GradientDrawable {
-        val baseColor = parseColorOrDefault(
-            style.backgroundColor,
-            DEFAULT_BACKGROUND_COLOR_INT
-        )
-        return GradientDrawable().apply {
-            setColor(baseColor)
-            cornerRadii = floatArrayOf(
-                0f,
-                0f,
-                0f,
-                0f,
-                NOTIFICATION_CORNER_RADIUS_PX,
-                NOTIFICATION_CORNER_RADIUS_PX,
-                NOTIFICATION_CORNER_RADIUS_PX,
-                NOTIFICATION_CORNER_RADIUS_PX
+            this.mediaParams = mediaParams
+            return runCatching {
+                mediaRoot.alpha = 0f
+                footer.alpha = 0f
+                windowManager.addView(mediaRoot, mediaParams)
+                overlayView = mediaRoot
+                windowManager.addView(footer, footerParams)
+                mediaRoot.animate().alpha(1f).setDuration(FADE_IN_MS).start()
+                footer.animate().alpha(1f).setDuration(FADE_IN_MS).start()
+                textOverlayView = footer
+                updatePlaybackState(
+                    status = if (streamType == StreamType.Notification) PlaybackStatus.Ready else PlaybackStatus.Buffering,
+                    isPlaying = false,
+                    errorMessage = null
+                )
+                AppLog.playbackStart(url)
+                scheduleAutoClose()
+            }.onFailure { error ->
+                AppLog.error("Unable to show overlay fallback", error)
+                runCatching { windowManager.removeView(mediaRoot) }
+                runCatching { windowManager.removeView(footer) }
+                overlayView = null
+                textOverlayView = null
+                player?.release()
+                player = null
+            }.isSuccess
+        }
+
+        private fun overlayLayoutParams(height: Int, yOffset: Int): WindowManager.LayoutParams =
+            WindowManager.LayoutParams(
+                overlayWidth(),
+                height,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = overlayGravity()
+                x = slotX()
+                y = yOffset
+            }
+
+        private fun measureFooterHeight(footer: View): Int {
+            footer.measure(
+                View.MeasureSpec.makeMeasureSpec(overlayWidth(), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             )
-            setStroke(TEXT_GLASS_STROKE_PX, TEXT_GLASS_STROKE_COLOR)
+            return footer.measuredHeight.coerceAtLeast(MIN_FOOTER_HEIGHT_PX)
         }
-    }
 
-    private fun buildNotificationContent(fillHeight: Boolean): LinearLayout =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 20, 24, 20)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                if (fillHeight) {
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                } else {
+        private fun roundedBackground(): GradientDrawable =
+            GradientDrawable().apply {
+                setColor(parseColorOrDefault(style.backgroundColor, DEFAULT_BACKGROUND_COLOR_INT))
+                cornerRadius = NOTIFICATION_CORNER_RADIUS_PX
+            }
+
+        private fun applyBackgroundBlur(params: WindowManager.LayoutParams) {
+            if (!BuildConfig.EXPERIMENTAL_OVERLAY_BACKGROUND_BLUR) {
+                return
+            }
+
+            val backgroundColor = parseColorOrDefault(
+                style.backgroundColor,
+                DEFAULT_BACKGROUND_COLOR_INT
+            )
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || Color.alpha(backgroundColor) == 255) {
+                return
+            }
+
+            // Android applies this at the window level, so opaque video/image pixels are not
+            // needlessly blurred. The effect is only visible through the translucent glass areas.
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+            params.blurBehindRadius = OVERLAY_BACKGROUND_BLUR_RADIUS_PX
+        }
+
+        private fun buildErrorTextView(): TextView =
+            TextView(ctx).apply {
+                setTextColor(Color.WHITE)
+                setBackgroundColor(0xCC000000.toInt())
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(16, 12, 16, 12)
+                visibility = TextView.GONE
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM
+                )
+            }
+
+        /** One door button: an optional round icon badge and a label, drawn per [buttonStyle]. */
+        inner class ActionButton(
+            val root: LinearLayout,
+            private val badge: TextView,
+            private val label: TextView
+        ) {
+            var action: OverlayAction? = null
+                private set
+
+            fun show(next: OverlayAction) {
+                action = next
+                label.text = next.label
+                val glyph = iconGlyph(next.icon)
+                badge.text = glyph.orEmpty()
+                badge.visibility = if (buttonStyle.showIcon && glyph != null) View.VISIBLE else View.GONE
+            }
+
+            fun setLabel(text: String) {
+                label.text = text
+            }
+        }
+
+        private fun buildActionBar(): LinearLayout {
+            actionButtons.clear()
+            val bar = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX, ACTION_BAR_PADDING_PX)
+                background = glassTextBackground()
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+            actions.forEachIndexed { index, action ->
+                val button = buildActionButton(index)
+                button.show(action)
+                button.root.setOnClickListener { onActionPressed(button) }
+                actionButtons += button
+                bar.addView(button.root)
+            }
+            return bar
+        }
+
+        private fun buildActionButton(index: Int): ActionButton {
+            val style = buttonStyle
+            val accent = parseColorOrDefault(style.accentColor, DEFAULT_ACCENT_COLOR)
+            val textColor = parseColorOrDefault(style.textColor, Color.WHITE)
+            val badge = TextView(ctx).apply {
+                gravity = Gravity.CENTER
+                textSize = style.textSize.toFloat()
+                includeFontPadding = false
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(withAlpha(accent, BADGE_ALPHA))
+                }
+                layoutParams = LinearLayout.LayoutParams(BADGE_SIZE_PX, BADGE_SIZE_PX).apply {
+                    marginEnd = BADGE_GAP_PX
+                }
+            }
+            val label = TextView(ctx).apply {
+                setTextColor(textColor)
+                textSize = style.textSize.toFloat()
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                includeFontPadding = false
+            }
+            val root = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = if (style.shape == "tile") Gravity.CENTER_VERTICAL or Gravity.START else Gravity.CENTER
+                setPadding(ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX, ACTION_BUTTON_H_PADDING_PX, ACTION_BUTTON_V_PADDING_PX)
+                background = actionButtonBackground(style, accent)
+                isFocusable = true
+                isFocusableInTouchMode = true
+                isClickable = true
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (index > 0) marginStart = ACTION_BUTTON_GAP_PX
+                }
+                addView(badge)
+                addView(label)
+                setOnKeyListener { _, keyCode, event ->
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_BACK -> {
+                            if (event.action == KeyEvent.ACTION_UP) {
+                                AppLog.playbackStop(reason = "overlay_back_pressed")
+                                closePopup(this@Popup)
+                            }
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            // At the edge of this popup's buttons, move to the popup beside it.
+                            val goingLeft = keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                            val atEdge = if (goingLeft) index == 0 else index == actions.lastIndex
+                            if (atEdge && event.action == KeyEvent.ACTION_DOWN) {
+                                neighbourPopup(this@Popup, goingLeft)?.let { focusPopup(it) }
+                                true
+                            } else {
+                                atEdge
+                            }
+                        }
+                        else -> false
+                    }
+                }
+                setOnFocusChangeListener { view, hasFocus ->
+                    view.animate().scaleX(if (hasFocus) 1.04f else 1f)
+                        .scaleY(if (hasFocus) 1.04f else 1f)
+                        .setDuration(120)
+                        .start()
+                }
+            }
+            return ActionButton(root, badge, label)
+        }
+
+        private var armedActionId: String? = null
+
+        private fun onActionPressed(button: ActionButton) {
+            val action = button.action ?: return
+            if (actionInFlight) return
+            if (action.confirm && armedActionId != action.id) {
+                armedActionId = action.id
+                button.setLabel(action.confirmLabel ?: getString(R.string.overlay_action_confirm))
+                mainHandler.postDelayed({
+                    if (armedActionId == action.id && !actionInFlight) {
+                        armedActionId = null
+                        button.setLabel(action.label)
+                    }
+                }, ACTION_CONFIRM_WINDOW_MS)
+                return
+            }
+            armedActionId = null
+            runAction(button, action)
+        }
+
+        private fun runAction(button: ActionButton, action: OverlayAction) {
+            val callbackUrl = actionCallbackUrl ?: return
+            actionInFlight = true
+            // Don't let the popup time out underneath a request that is still running.
+            autoCloseHandler.removeCallbacksAndMessages(null)
+            button.setLabel(getString(R.string.overlay_action_working))
+            Thread {
+                val result = runCatching { postAction(callbackUrl, action.id) }
+                mainHandler.post {
+                    actionInFlight = false
+                    if (overlayView == null) return@post
+                    result.onSuccess { response ->
+                        AppLog.lifecycleEvent("overlay_action_succeeded", action.label)
+                        val next = response.optJSONObject("next")?.let { json ->
+                            OverlayAction.listFromJsonString(org.json.JSONArray().put(json).toString())
+                                .firstOrNull()
+                        }
+                        if (next != null) {
+                            // Door unlocked / garage opened: keep the video up and offer
+                            // Lock / Close. Home Assistant closes the popup once secured.
+                            button.show(next)
+                            val staySeconds = response.optLong("stayOpenSeconds", 0L)
+                            val stayMillis = if (staySeconds > 0) staySeconds * 1_000L else FOLLOW_UP_CLOSE_DELAY_MS
+                            autoCloseHandler.postDelayed({ closePopup(this@Popup) }, stayMillis)
+                        } else {
+                            button.setLabel(getString(R.string.overlay_action_done))
+                            autoCloseHandler.postDelayed({ closePopup(this@Popup) }, ACTION_SUCCESS_CLOSE_DELAY_MS)
+                        }
+                    }.onFailure { error ->
+                        AppLog.error("Overlay action failed: ${action.label}", error)
+                        button.setLabel(getString(R.string.overlay_action_failed))
+                        mainHandler.postDelayed({
+                            if (overlayView != null && !actionInFlight) button.setLabel(action.label)
+                        }, ACTION_FAILED_RESET_MS)
+                        autoCloseHandler.postDelayed({ closePopup(this@Popup) }, ACTION_FAILED_CLOSE_DELAY_MS)
+                    }
+                }
+            }.start()
+        }
+
+        private fun postAction(callbackUrl: String, actionId: String): JSONObject {
+            val token = PairingState.pairedToken(ctx.applicationContext)
+                ?: throw IOException("Receiver is not paired")
+            val body = JSONObject()
+                .put("deviceId", ReceiverDeviceInfo.stableDeviceId(ctx.applicationContext))
+                .put("actionId", actionId)
+                .toString()
+                .toByteArray(Charsets.UTF_8)
+            val connection = (URL(callbackUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = ACTION_TIMEOUT_MS
+                readTimeout = ACTION_TIMEOUT_MS
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Authorization", "Bearer $token")
+            }
+            try {
+                connection.outputStream.use { it.write(body) }
+                val status = connection.responseCode
+                if (status !in 200..299) {
+                    val detail = runCatching {
+                        connection.errorStream?.bufferedReader()?.use { it.readText() }
+                            ?.let { JSONObject(it).optString("error") }
+                    }.getOrNull()
+                    throw IOException("Home Assistant returned HTTP $status${detail?.let { ": $it" } ?: ""}")
+                }
+                val text = connection.inputStream.bufferedReader().use { it.readText() }
+                return runCatching { JSONObject(text) }.getOrDefault(JSONObject())
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+        private fun actionButtonBackground(style: ButtonStyle, accent: Int): StateListDrawable {
+            val fill = parseColorOrDefault(style.backgroundColor, DEFAULT_BUTTON_COLOR)
+            val radius = when (style.shape) {
+                "pill" -> PILL_RADIUS_PX
+                "square" -> 0f
+                else -> style.cornerRadius.toFloat()
+            }
+            return StateListDrawable().apply {
+                addState(
+                    intArrayOf(android.R.attr.state_focused),
+                    GradientDrawable().apply {
+                        setColor(fill)
+                        cornerRadius = radius
+                        setStroke(ACTION_FOCUSED_STROKE_PX, accent)
+                    }
+                )
+                addState(
+                    intArrayOf(),
+                    GradientDrawable().apply {
+                        setColor(fill)
+                        cornerRadius = radius
+                        setStroke(1, IDLE_OUTLINE_COLOR)
+                    }
+                )
+            }
+        }
+
+        private fun withAlpha(color: Int, alpha: Int): Int =
+            Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
+
+        private fun addNotificationContent(root: LinearLayout, fillHeight: Boolean) {
+            root.addView(
+                buildNotificationContent(fillHeight).apply {
+                    background = glassTextBackground()
                 }
             )
-        }.also { content ->
-            TextView(this).apply {
-                text = title.ifBlank { getString(R.string.notification_default_title) }
-                setTextColor(parseColorOrDefault(style.titleColor, Color.rgb(80, 191, 242)))
-                textSize = style.titleSize.toFloat()
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                includeFontPadding = false
-                content.addView(this)
+        }
+
+        private fun addNotificationOverlay(root: FrameLayout) {
+            val content = buildNotificationContent(fillHeight = false).apply {
+                setBackgroundColor(parseColorOrDefault(style.backgroundColor, DEFAULT_BACKGROUND_COLOR_INT))
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM
+                )
             }
-            message?.takeIf { it.isNotBlank() }?.let { body ->
-                TextView(this).apply {
-                    text = body
-                    setTextColor(parseColorOrDefault(style.messageColor, Color.rgb(251, 245, 245)))
-                    textSize = style.messageSize.toFloat()
-                    setPadding(0, 10, 0, 0)
+            root.addView(content)
+        }
+
+        private fun glassTextBackground(): GradientDrawable {
+            val baseColor = parseColorOrDefault(
+                style.backgroundColor,
+                DEFAULT_BACKGROUND_COLOR_INT
+            )
+            return GradientDrawable().apply {
+                setColor(baseColor)
+                cornerRadii = floatArrayOf(
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    NOTIFICATION_CORNER_RADIUS_PX,
+                    NOTIFICATION_CORNER_RADIUS_PX,
+                    NOTIFICATION_CORNER_RADIUS_PX,
+                    NOTIFICATION_CORNER_RADIUS_PX
+                )
+                setStroke(TEXT_GLASS_STROKE_PX, TEXT_GLASS_STROKE_COLOR)
+            }
+        }
+
+        private fun buildNotificationContent(fillHeight: Boolean): LinearLayout =
+            LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(24, 20, 24, 20)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    if (fillHeight) {
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    } else {
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    }
+                )
+            }.also { content ->
+                TextView(ctx).apply {
+                    text = title.ifBlank { getString(R.string.notification_default_title) }
+                    setTextColor(parseColorOrDefault(style.titleColor, Color.rgb(80, 191, 242)))
+                    textSize = style.titleSize.toFloat()
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
                     includeFontPadding = false
                     content.addView(this)
                 }
+                message?.takeIf { it.isNotBlank() }?.let { body ->
+                    TextView(ctx).apply {
+                        text = body
+                        setTextColor(parseColorOrDefault(style.messageColor, Color.rgb(251, 245, 245)))
+                        textSize = style.messageSize.toFloat()
+                        setPadding(0, 10, 0, 0)
+                        includeFontPadding = false
+                        content.addView(this)
+                    }
+                }
             }
-        }
 
-    private fun addPlayerView(root: FrameLayout) {
-        val previewImageView = previewUrl?.let { imageUrl ->
-            addSnapshotView(root, imageUrl, updateStateOnLoad = false)
-        }
-        lateinit var playerView: PlayerView
-        var fallbackStarted = false
-        val overlayPlayer = buildReceiverPlayer(this).also { exoPlayer ->
-            exoPlayer.volume = if (muted) 0f else 1f
-            exoPlayer.addListener(
-                object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        val playerError = exoPlayer.playerError
-                        if (playerError == null && playbackState == Player.STATE_READY) {
-                            playerView.alpha = 1f
-                            previewImageView?.visibility = ImageView.GONE
-                        }
-                        updatePlaybackState(
-                            status = playerError?.let { PlaybackStatus.Error }
-                                ?: playbackState.toPlaybackStatus(),
-                            isPlaying = exoPlayer.isPlaying,
-                            errorMessage = playerError?.toDisplayMessage()
-                        )
-                    }
-
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        val playerError = exoPlayer.playerError
-                        if (playerError == null && isPlaying) {
-                            playerView.alpha = 1f
-                            previewImageView?.visibility = ImageView.GONE
-                        }
-                        updatePlaybackState(
-                            status = playerError?.let { PlaybackStatus.Error }
-                                ?: exoPlayer.playbackState.toPlaybackStatus(),
-                            isPlaying = isPlaying,
-                            errorMessage = playerError?.toDisplayMessage()
-                        )
-                    }
-
-                    override fun onPlayerError(error: PlaybackException) {
-                        val message = error.toDisplayMessage()
-                        val playableFallbackUrl = fallbackUrl
-                        if (
-                            !fallbackStarted &&
-                            playableFallbackUrl != null &&
-                            fallbackStreamType == StreamType.Mjpeg
-                        ) {
-                            fallbackStarted = true
-                            AppLog.error(
-                                "Overlay playback failed, starting MJPEG fallback: $message",
-                                error
-                            )
-                            exoPlayer.release()
-                            playerView.visibility = PlayerView.GONE
-                            url = playableFallbackUrl
-                            streamType = StreamType.Mjpeg
+        private fun addPlayerView(root: FrameLayout) {
+            val previewImageView = previewUrl?.let { imageUrl ->
+                addSnapshotView(root, imageUrl, updateStateOnLoad = false)
+            }
+            lateinit var playerView: PlayerView
+            var fallbackStarted = false
+            val overlayPlayer = buildReceiverPlayer(ctx).also { exoPlayer ->
+                exoPlayer.volume = if (muted) 0f else 1f
+                exoPlayer.addListener(
+                    object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            val playerError = exoPlayer.playerError
+                            if (playerError == null && playbackState == Player.STATE_READY) {
+                                playerView.alpha = 1f
+                                previewImageView?.visibility = ImageView.GONE
+                            }
                             updatePlaybackState(
-                                status = PlaybackStatus.Buffering,
-                                isPlaying = false,
-                                errorMessage = message
+                                status = playerError?.let { PlaybackStatus.Error }
+                                    ?: playbackState.toPlaybackStatus(),
+                                isPlaying = exoPlayer.isPlaying,
+                                errorMessage = playerError?.toDisplayMessage()
                             )
-                            addMjpegView(root, previewImageView)
-                            return
                         }
+
+                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                            val playerError = exoPlayer.playerError
+                            if (playerError == null && isPlaying) {
+                                playerView.alpha = 1f
+                                previewImageView?.visibility = ImageView.GONE
+                            }
+                            updatePlaybackState(
+                                status = playerError?.let { PlaybackStatus.Error }
+                                    ?: exoPlayer.playbackState.toPlaybackStatus(),
+                                isPlaying = isPlaying,
+                                errorMessage = playerError?.toDisplayMessage()
+                            )
+                        }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            val message = error.toDisplayMessage()
+                            val playableFallbackUrl = fallbackUrl
+                            if (
+                                !fallbackStarted &&
+                                playableFallbackUrl != null &&
+                                fallbackStreamType == StreamType.Mjpeg
+                            ) {
+                                fallbackStarted = true
+                                AppLog.error(
+                                    "Overlay playback failed, starting MJPEG fallback: $message",
+                                    error
+                                )
+                                exoPlayer.release()
+                                playerView.visibility = PlayerView.GONE
+                                url = playableFallbackUrl
+                                streamType = StreamType.Mjpeg
+                                updatePlaybackState(
+                                    status = PlaybackStatus.Buffering,
+                                    isPlaying = false,
+                                    errorMessage = message
+                                )
+                                addMjpegView(root, previewImageView)
+                                return
+                            }
+                            val hasPreviewFallback = previewImageView != null
+                            if (hasPreviewFallback) {
+                                playerView.alpha = 0f
+                                previewImageView.visibility = ImageView.VISIBLE
+                            }
+                            updatePlaybackState(
+                                status = PlaybackStatus.Error,
+                                isPlaying = false,
+                                errorMessage = if (hasPreviewFallback) {
+                                    getString(R.string.snapshot_fallback_after_video_error, message)
+                                } else {
+                                    message
+                                }
+                            )
+                            errorTextView?.text = error.toOverlayMessage(ctx)
+                            errorTextView?.visibility = if (hasPreviewFallback) {
+                                TextView.GONE
+                            } else {
+                                TextView.VISIBLE
+                            }
+                            AppLog.error("Overlay playback failed: $message", error)
+                        }
+                    }
+                )
+                exoPlayer.setMediaItem(MediaItem.fromUri(url))
+                exoPlayer.repeatMode = Player.REPEAT_MODE_ONE
+                exoPlayer.playWhenReady = true
+                exoPlayer.prepare()
+            }
+            player = overlayPlayer
+
+            playerView = LayoutInflater.from(ctx)
+                .inflate(R.layout.overlay_player_view, root, false) as PlayerView
+            playerView.apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                useController = false
+                this.player = overlayPlayer
+                alpha = if (previewImageView == null) 1f else 0.01f
+            }
+            root.addView(playerView)
+        }
+
+        private fun addMjpegView(root: FrameLayout, existingPreviewImageView: ImageView? = null) {
+            val previewImageView = existingPreviewImageView ?: previewUrl?.let { imageUrl ->
+                addSnapshotView(root, imageUrl, updateStateOnLoad = false)
+            }
+            val streamImageView = ImageView(ctx).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                adjustViewBounds = true
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundColor(Color.BLACK)
+                alpha = if (previewImageView == null) 1f else 0.01f
+            }
+            root.addView(streamImageView)
+
+            mjpegRunning = true
+            mjpegThread = Thread {
+                var firstFrameRendered = false
+                runCatching {
+                    val connection = URL(url).openConnection().apply {
+                        connectTimeout = MJPEG_CONNECT_TIMEOUT_MS
+                        readTimeout = MJPEG_READ_TIMEOUT_MS
+                    }
+                    BufferedInputStream(connection.getInputStream()).use { stream ->
+                        while (mjpegRunning) {
+                            val frame = readJpegFrame(stream) ?: break
+                            val bitmap = BitmapFactory.decodeByteArray(frame, 0, frame.size)
+                                ?: error(getString(R.string.error_snapshot_unsupported_image))
+                            mainHandler.post {
+                                streamImageView.setImageBitmap(bitmap)
+                                streamImageView.alpha = 1f
+                                previewImageView?.visibility = ImageView.GONE
+                                if (!firstFrameRendered) {
+                                    firstFrameRendered = true
+                                    updatePlaybackState(
+                                        status = PlaybackStatus.Ready,
+                                        isPlaying = true,
+                                        errorMessage = null
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }.onFailure { error ->
+                    mainHandler.post {
+                        val message = error.message ?: getString(R.string.error_unknown_snapshot)
                         val hasPreviewFallback = previewImageView != null
                         if (hasPreviewFallback) {
-                            playerView.alpha = 0f
+                            streamImageView.alpha = 0f
                             previewImageView.visibility = ImageView.VISIBLE
                         }
                         updatePlaybackState(
@@ -731,209 +1017,320 @@ class OverlayPlayerService : Service() {
                                 message
                             }
                         )
-                        errorTextView?.text = error.toOverlayMessage(this@OverlayPlayerService)
+                        errorTextView?.text = getString(R.string.snapshot_unavailable)
                         errorTextView?.visibility = if (hasPreviewFallback) {
                             TextView.GONE
                         } else {
                             TextView.VISIBLE
                         }
-                        AppLog.error("Overlay playback failed: $message", error)
+                        AppLog.error("MJPEG stream failed: $message", error)
                     }
                 }
-            )
-            exoPlayer.setMediaItem(MediaItem.fromUri(url))
-            exoPlayer.repeatMode = Player.REPEAT_MODE_ONE
-            exoPlayer.playWhenReady = true
-            exoPlayer.prepare()
+            }.apply { start() }
         }
-        player = overlayPlayer
 
-        playerView = LayoutInflater.from(this)
-            .inflate(R.layout.overlay_player_view, root, false) as PlayerView
-        playerView.apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            useController = false
-            this.player = overlayPlayer
-            alpha = if (previewImageView == null) 1f else 0.01f
-        }
-        root.addView(playerView)
-    }
+        private fun readJpegFrame(stream: BufferedInputStream): ByteArray? {
+            val frame = ByteArrayOutputStream()
+            var previous = -1
+            var inFrame = false
 
-    private fun addMjpegView(root: FrameLayout, existingPreviewImageView: ImageView? = null) {
-        val previewImageView = existingPreviewImageView ?: previewUrl?.let { imageUrl ->
-            addSnapshotView(root, imageUrl, updateStateOnLoad = false)
-        }
-        val streamImageView = ImageView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            adjustViewBounds = true
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(Color.BLACK)
-            alpha = if (previewImageView == null) 1f else 0.01f
-        }
-        root.addView(streamImageView)
-
-        mjpegRunning = true
-        mjpegThread = Thread {
-            var firstFrameRendered = false
-            runCatching {
-                val connection = URL(url).openConnection().apply {
-                    connectTimeout = MJPEG_CONNECT_TIMEOUT_MS
-                    readTimeout = MJPEG_READ_TIMEOUT_MS
+            while (mjpegRunning) {
+                val current = stream.read()
+                if (current == -1) {
+                    return null
                 }
-                BufferedInputStream(connection.getInputStream()).use { stream ->
-                    while (mjpegRunning) {
-                        val frame = readJpegFrame(stream) ?: break
-                        val bitmap = BitmapFactory.decodeByteArray(frame, 0, frame.size)
+
+                if (!inFrame) {
+                    if (previous == JPEG_MARKER && current == JPEG_START_MARKER) {
+                        frame.reset()
+                        frame.write(JPEG_MARKER)
+                        frame.write(JPEG_START_MARKER)
+                        inFrame = true
+                    }
+                } else {
+                    frame.write(current)
+                    if (frame.size() > MAX_MJPEG_FRAME_BYTES) {
+                        throw IOException(
+                            getString(
+                                R.string.error_mjpeg_frame_too_large,
+                                MAX_MJPEG_FRAME_BYTES
+                            )
+                        )
+                    }
+                    if (previous == JPEG_MARKER && current == JPEG_END_MARKER) {
+                        return frame.toByteArray()
+                    }
+                }
+                previous = current
+            }
+            return null
+        }
+
+        private fun addSnapshotView(
+            root: FrameLayout,
+            imageUrl: String,
+            updateStateOnLoad: Boolean
+        ): ImageView {
+            val imageView = ImageView(ctx).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                adjustViewBounds = true
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundColor(android.graphics.Color.BLACK)
+            }
+            root.addView(imageView)
+
+            Thread {
+                runCatching {
+                    val connection = URL(imageUrl).openConnection().apply {
+                        connectTimeout = SNAPSHOT_CONNECT_TIMEOUT_MS
+                        readTimeout = SNAPSHOT_READ_TIMEOUT_MS
+                    }
+                    connection.getInputStream().use { stream ->
+                        BitmapFactory.decodeStream(stream)
                             ?: error(getString(R.string.error_snapshot_unsupported_image))
-                        mainHandler.post {
-                            streamImageView.setImageBitmap(bitmap)
-                            streamImageView.alpha = 1f
-                            previewImageView?.visibility = ImageView.GONE
-                            if (!firstFrameRendered) {
-                                firstFrameRendered = true
-                                updatePlaybackState(
-                                    status = PlaybackStatus.Ready,
-                                    isPlaying = true,
-                                    errorMessage = null
-                                )
+                    }
+                }.onSuccess { bitmap ->
+                    mainHandler.post {
+                        imageView.setImageBitmap(bitmap)
+                        if (updateStateOnLoad) {
+                            updatePlaybackState(
+                                status = PlaybackStatus.Ready,
+                                isPlaying = false,
+                                errorMessage = null
+                            )
+                        }
+                    }
+                }.onFailure { error ->
+                    mainHandler.post {
+                        val message = error.message ?: getString(R.string.error_unknown_snapshot)
+                        if (updateStateOnLoad) {
+                            updatePlaybackState(
+                                status = PlaybackStatus.Error,
+                                isPlaying = false,
+                                errorMessage = message
+                            )
+                            errorTextView?.text = getString(R.string.snapshot_unavailable)
+                            errorTextView?.visibility = TextView.VISIBLE
+                        }
+                        AppLog.error("Snapshot load failed: $message", error)
+                    }
+                }
+            }.start()
+            return imageView
+        }
+
+        /** What gets the remote first: the video, so OK can make it full screen. */
+        fun focusTarget(): View? = mediaContainerView?.takeIf { it.isFocusable }
+            ?: actionButtons.firstOrNull()?.root
+
+        /**
+         * The video can be selected with the remote: OK makes it fill the screen (and back),
+         * Down goes to the door button, Back shrinks it or closes the popup.
+         */
+        private fun makeVideoSelectable(media: FrameLayout) {
+            media.isFocusable = true
+            media.isFocusableInTouchMode = true
+            media.foreground = StateListDrawable().apply {
+                addState(
+                    intArrayOf(android.R.attr.state_focused),
+                    GradientDrawable().apply {
+                        setColor(Color.TRANSPARENT)
+                        setStroke(
+                            ACTION_FOCUSED_STROKE_PX,
+                            parseColorOrDefault(buttonStyle.accentColor, DEFAULT_ACCENT_COLOR)
+                        )
+                    }
+                )
+                addState(intArrayOf(), GradientDrawable().apply { setColor(Color.TRANSPARENT) })
+            }
+            media.setOnClickListener { setExpanded(!expanded) }
+            media.setOnKeyListener { _, keyCode, event ->
+                when (keyCode) {
+                    KeyEvent.KEYCODE_BACK -> {
+                        if (event.action == KeyEvent.ACTION_UP) {
+                            if (expanded) {
+                                setExpanded(false)
+                            } else {
+                                AppLog.playbackStop(reason = "overlay_back_pressed")
+                                closePopup(this@Popup)
                             }
                         }
+                        true
                     }
-                }
-            }.onFailure { error ->
-                mainHandler.post {
-                    val message = error.message ?: getString(R.string.error_unknown_snapshot)
-                    val hasPreviewFallback = previewImageView != null
-                    if (hasPreviewFallback) {
-                        streamImageView.alpha = 0f
-                        previewImageView.visibility = ImageView.VISIBLE
-                    }
-                    updatePlaybackState(
-                        status = PlaybackStatus.Error,
-                        isPlaying = false,
-                        errorMessage = if (hasPreviewFallback) {
-                            getString(R.string.snapshot_fallback_after_video_error, message)
-                        } else {
-                            message
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (event.action == KeyEvent.ACTION_DOWN && !expanded) {
+                            neighbourPopup(this@Popup, keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
+                                ?.let { focusPopup(it) }
                         }
-                    )
-                    errorTextView?.text = getString(R.string.snapshot_unavailable)
-                    errorTextView?.visibility = if (hasPreviewFallback) {
-                        TextView.GONE
-                    } else {
-                        TextView.VISIBLE
+                        true
                     }
-                    AppLog.error("MJPEG stream failed: $message", error)
+                    else -> false
                 }
             }
-        }.apply { start() }
-    }
+        }
 
-    private fun readJpegFrame(stream: BufferedInputStream): ByteArray? {
-        val frame = ByteArrayOutputStream()
-        var previous = -1
-        var inFrame = false
-
-        while (mjpegRunning) {
-            val current = stream.read()
-            if (current == -1) {
-                return null
-            }
-
-            if (!inFrame) {
-                if (previous == JPEG_MARKER && current == JPEG_START_MARKER) {
-                    frame.reset()
-                    frame.write(JPEG_MARKER)
-                    frame.write(JPEG_START_MARKER)
-                    inFrame = true
-                }
+        /** Fill the whole screen with this popup (buttons stay along the bottom), or shrink back. */
+        fun setExpanded(value: Boolean) {
+            if (value == expanded) return
+            val view = overlayView ?: return
+            val params = mediaParams ?: return
+            val media = mediaContainerView ?: return
+            if (value) {
+                normalParams = WindowManager.LayoutParams().also { it.copyFrom(params) }
+                params.width = WindowManager.LayoutParams.MATCH_PARENT
+                params.height = WindowManager.LayoutParams.MATCH_PARENT
+                params.x = 0
+                params.y = 0
+                params.gravity = Gravity.TOP or Gravity.START
+                media.layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+                )
             } else {
-                frame.write(current)
-                if (frame.size() > MAX_MJPEG_FRAME_BYTES) {
-                    throw IOException(
-                        getString(
-                            R.string.error_mjpeg_frame_too_large,
-                            MAX_MJPEG_FRAME_BYTES
-                        )
-                    )
+                normalParams?.let { saved ->
+                    params.width = saved.width
+                    params.height = saved.height
+                    params.x = saved.x
+                    params.y = saved.y
+                    params.gravity = saved.gravity
                 }
-                if (previous == JPEG_MARKER && current == JPEG_END_MARKER) {
-                    return frame.toByteArray()
-                }
+                media.layoutParams = mediaLayoutParams()
             }
-            previous = current
+            expanded = value
+            runCatching { windowManager.updateViewLayout(view, params) }
+            onPopupExpanded(this, value)
+            media.post { media.requestFocus() }
         }
-        return null
-    }
 
-    private fun addSnapshotView(
-        root: FrameLayout,
-        imageUrl: String,
-        updateStateOnLoad: Boolean
-    ): ImageView {
-        val imageView = ImageView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+        fun setHidden(hidden: Boolean) {
+            val visibility = if (hidden) View.INVISIBLE else View.VISIBLE
+            overlayView?.visibility = visibility
+            textOverlayView?.visibility = visibility
+        }
+
+        /** Fade to transparent, then [done] (which removes the popup). */
+        fun fadeOut(done: () -> Unit) {
+            closing = true
+            autoCloseHandler.removeCallbacksAndMessages(null)
+            val views = listOfNotNull(overlayView, textOverlayView)
+            if (views.isEmpty()) return done()
+            var remaining = views.size
+            views.forEach { view ->
+                view.animate().alpha(0f).setDuration(FADE_OUT_MS).withEndAction {
+                    remaining -= 1
+                    if (remaining == 0) done()
+                }.start()
+            }
+        }
+
+        /** Removes this popup's windows and stops its video. */
+        fun remove() {
+            autoCloseHandler.removeCallbacksAndMessages(null)
+            mainHandler.removeCallbacksAndMessages(null)
+            actionButtons.clear()
+            armedActionId = null
+            mjpegRunning = false
+            mjpegThread?.interrupt()
+            mjpegThread = null
+            overlayView?.let { view ->
+                runCatching { windowManager.removeView(view) }
+            }
+            textOverlayView?.let { view ->
+                runCatching { windowManager.removeView(view) }
+            }
+            overlayView = null
+            textOverlayView = null
+            errorTextView = null
+            mediaContainerView = null
+            player?.release()
+            player = null
+            AppLog.playbackStop(reason = "overlay_popup_closed")
+        }
+
+        private fun updatePlaybackState(
+            status: PlaybackStatus,
+            isPlaying: Boolean,
+            errorMessage: String?
+        ) {
+            // The receiver reports one display; report the newest popup.
+            if (popups.lastOrNull() !== this) return
+            ReceiverRuntimeState.update(
+                ReceiverPlaybackSnapshot(
+                    status = status,
+                    isPlaying = isPlaying,
+                    mode = ReceiverPlaybackMode.Overlay,
+                    title = title,
+                    url = url,
+                    previewUrl = previewUrl,
+                    fallbackUrl = fallbackUrl,
+                    fallbackStreamType = fallbackStreamType?.wireName,
+                    streamType = streamType.wireName,
+                    errorMessage = errorMessage
+                )
             )
-            adjustViewBounds = true
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(android.graphics.Color.BLACK)
         }
-        root.addView(imageView)
 
-        Thread {
-            runCatching {
-                val connection = URL(imageUrl).openConnection().apply {
-                    connectTimeout = SNAPSHOT_CONNECT_TIMEOUT_MS
-                    readTimeout = SNAPSHOT_READ_TIMEOUT_MS
-                }
-                connection.getInputStream().use { stream ->
-                    BitmapFactory.decodeStream(stream)
-                        ?: error(getString(R.string.error_snapshot_unsupported_image))
-                }
-            }.onSuccess { bitmap ->
-                mainHandler.post {
-                    imageView.setImageBitmap(bitmap)
-                    if (updateStateOnLoad) {
-                        updatePlaybackState(
-                            status = PlaybackStatus.Ready,
-                            isPlaying = false,
-                            errorMessage = null
-                        )
-                    }
-                }
-            }.onFailure { error ->
-                mainHandler.post {
-                    val message = error.message ?: getString(R.string.error_unknown_snapshot)
-                    if (updateStateOnLoad) {
-                        updatePlaybackState(
-                            status = PlaybackStatus.Error,
-                            isPlaying = false,
-                            errorMessage = message
-                        )
-                        errorTextView?.text = getString(R.string.snapshot_unavailable)
-                        errorTextView?.visibility = TextView.VISIBLE
-                    }
-                    AppLog.error("Snapshot load failed: $message", error)
+        private fun scheduleAutoClose() {
+            autoCloseHandler.removeCallbacksAndMessages(null)
+            val duration = durationSeconds ?: return
+            autoCloseHandler.postDelayed({ closePopup(this) }, duration * 1_000L)
+        }
+
+        fun overlayGravity(): Int = overlayGravityFor(style.position)
+
+        private fun isBottomPosition(): Boolean =
+            style.position == NotificationPosition.BottomRight ||
+                style.position == NotificationPosition.BottomLeft
+
+        fun overlayWidth(): Int =
+            if (compact) {
+                COMPACT_WIDTH_PX
+            } else {
+                style.width ?: if (streamType == StreamType.Notification) {
+                    NOTIFICATION_WIDTH_PX
+                } else {
+                    OVERLAY_WIDTH_PX
                 }
             }
-        }.start()
-        return imageView
+
+        /** Height of the video area when the popup isn't given an explicit size. */
+        private fun mediaHeightPx(): Int = if (compact) COMPACT_HEIGHT_PX else OVERLAY_HEIGHT_PX
+
+        /** Distance from the screen edge: popups sit side by side, one per slot. */
+        fun slotX(): Int = OVERLAY_MARGIN_PX + (0 until slot).sumOf { SLOT_WIDTHS_PX[it] + SLOT_GAP_PX }
+
+        private fun overlayHeight(): Int =
+            (if (compact) null else style.height) ?: if (streamType == StreamType.Notification) {
+                WindowManager.LayoutParams.WRAP_CONTENT
+            } else if (showNotification || actions.isNotEmpty()) {
+                WindowManager.LayoutParams.WRAP_CONTENT
+            } else {
+                mediaHeightPx()
+            }
+
+        private fun mediaLayoutParams(): LinearLayout.LayoutParams =
+            if ((showNotification || actions.isNotEmpty()) && (compact || style.height == null)) {
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    mediaHeightPx()
+                )
+            } else {
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
+                )
+            }
     }
 
     /**
      * Pause or quiet whatever is playing while the popup is up. Taking transient
      * audio focus makes well-behaved apps (Netflix, YouTube, Plex, ...) pause or
-     * duck, and resume on their own when the focus is given back in [removeOverlay].
+     * duck, and resume on their own when the focus is given back once the last popup closes.
      */
-    private fun requestMediaFocus() {
+    private fun requestMediaFocus(mediaFocus: String) {
         if (mediaFocus == MEDIA_FOCUS_MUTE) {
             muteMediaForPopup()
             return
@@ -1002,95 +1399,23 @@ class OverlayPlayerService : Service() {
         runCatching { audioManager.abandonAudioFocusRequest(request) }
     }
 
-    private fun removeOverlay() {
-        abandonMediaFocus()
-        mainHandler.removeCallbacksAndMessages(null)
-        actionButtons.clear()
-        armedActionId = null
-        mjpegRunning = false
-        mjpegThread?.interrupt()
-        mjpegThread = null
-        overlayView?.let { view ->
-            runCatching { windowManager.removeView(view) }
-        }
-        textOverlayView?.let { view ->
-            runCatching { windowManager.removeView(view) }
-        }
-        overlayView = null
-        textOverlayView = null
-        errorTextView = null
-        player?.release()
-        player = null
-        ReceiverRuntimeState.markIdle()
-        AppLog.playbackStop(reason = "overlay_service_stopped")
-    }
-
-    private fun updatePlaybackState(
-        status: PlaybackStatus,
-        isPlaying: Boolean,
-        errorMessage: String?
-    ) {
-        ReceiverRuntimeState.update(
-            ReceiverPlaybackSnapshot(
-                status = status,
-                isPlaying = isPlaying,
-                mode = ReceiverPlaybackMode.Overlay,
-                title = title,
-                url = url,
-                previewUrl = previewUrl,
-                fallbackUrl = fallbackUrl,
-                fallbackStreamType = fallbackStreamType?.wireName,
-                streamType = streamType.wireName,
-                errorMessage = errorMessage
-            )
-        )
-    }
-
-    private fun scheduleAutoClose() {
-        autoCloseHandler.removeCallbacksAndMessages(null)
-        val duration = durationSeconds ?: return
-        autoCloseHandler.postDelayed({ stopSelf() }, duration * 1_000L)
-    }
-
-    private fun overlayGravity(): Int = overlayGravityFor(style.position)
-
-    private fun isBottomPosition(): Boolean =
-        style.position == NotificationPosition.BottomRight ||
-            style.position == NotificationPosition.BottomLeft
-
-    private fun overlayWidth(): Int =
-        style.width ?: if (streamType == StreamType.Notification) {
-            NOTIFICATION_WIDTH_PX
-        } else {
-            OVERLAY_WIDTH_PX
-        }
-
-    private fun overlayHeight(): Int =
-        style.height ?: if (streamType == StreamType.Notification) {
-            WindowManager.LayoutParams.WRAP_CONTENT
-        } else if (showNotification || actions.isNotEmpty()) {
-            WindowManager.LayoutParams.WRAP_CONTENT
-        } else {
-            OVERLAY_HEIGHT_PX
-        }
-
-    private fun mediaLayoutParams(): LinearLayout.LayoutParams =
-        if ((showNotification || actions.isNotEmpty()) && style.height == null) {
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                OVERLAY_HEIGHT_PX
-            )
-        } else {
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-        }
-
     companion object {
         const val ACTION_SHOW = "com.hatvpip.receiver.action.SHOW_OVERLAY"
         const val ACTION_STOP = "com.hatvpip.receiver.action.STOP_OVERLAY"
+        const val ACTION_CLOSE_POPUP = "com.hatvpip.receiver.action.CLOSE_OVERLAY_POPUP"
+        /** Popups shown at once; a new one past this closes the oldest. */
+        const val MAX_POPUPS = 3
+        private const val MAX_DIM_PERCENT = 80
+        private const val FADE_IN_MS = 250L
+        /** Popups fade from opaque to transparent over this long when they close. */
+        private const val FADE_OUT_MS = 1_500L
+        /** What was playing resumes this long before the fade-out finishes. */
+        private const val RESUME_BEFORE_FADE_END_MS = 1_000L
+        private const val COMPACT_WIDTH_PX = 480
+        private const val COMPACT_HEIGHT_PX = 270
+        private const val SLOT_GAP_PX = 24
+        /** Widest each slot can be (first full size, the rest compact). */
+        private val SLOT_WIDTHS_PX = intArrayOf(640, COMPACT_WIDTH_PX, COMPACT_WIDTH_PX)
         private const val OVERLAY_WIDTH_PX = 640
         private const val OVERLAY_HEIGHT_PX = 360
         private const val MIN_MEDIA_HEIGHT_PX = 120

@@ -1808,8 +1808,12 @@ def _with_overlay_actions(
     """Attach one-time overlay action buttons to a show command."""
 
     store = pending_action_store(hass)
+    popup_key = _optional_text(call.data.get(ATTR_CAMERA_ENTITY))
     command = replace(
-        command, media_focus=media_behavior_for(hass, receiver.options)
+        command,
+        media_focus=media_behavior_for(hass, receiver.options),
+        popup_key=popup_key,
+        dim_percent=int(popup_appearance(hass)["dim_background"]) or None,
     )
     if ATTR_ACTIONS in call.data:
         # Explicit buttons from the automation win; `actions: []` hides buttons.
@@ -1818,8 +1822,8 @@ def _with_overlay_actions(
         paired = default_action_spec(hass, call.data.get(ATTR_CAMERA_ENTITY))
         specs = [paired] if paired else []
     if not specs:
-        # A new popup without buttons invalidates buttons from an earlier popup.
-        store.clear_device(receiver.device_id)
+        # This camera's earlier popup is replaced, so its buttons go too.
+        store.clear_popup(receiver.device_id, popup_key)
         return command
 
     for spec in specs:
@@ -1836,6 +1840,7 @@ def _with_overlay_actions(
         receiver.device_id,
         specs,
         ttl_seconds=command.duration_seconds or DEFAULT_ACTION_TTL_SECONDS,
+        popup_key=popup_key,
     )
     callback_url = _absolute_stream_url(
         hass,
@@ -1855,31 +1860,40 @@ async def _async_close_receiver_command(
     remote: Any,
     *,
     prefer_remote: bool,
+    popup_key: str | None = None,
 ) -> tuple[bool, str]:
-    """Close a receiver display with remote/local fallback ordering."""
+    """Close a receiver display (or one popup) with remote/local fallback ordering."""
 
-    if prefer_remote and await remote.async_send_close(device_id=receiver.device_id):
+    async def _remote() -> bool:
+        if popup_key:
+            return bool(
+                await remote.async_send_close(
+                    device_id=receiver.device_id, popup_key=popup_key
+                )
+            )
+        return bool(await remote.async_send_close(device_id=receiver.device_id))
+
+    async def _local() -> bool:
+        if popup_key:
+            return await async_close_receiver(
+                receiver.host, receiver.port, token=receiver.token, popup_key=popup_key
+            )
+        return await async_close_receiver(
+            receiver.host, receiver.port, token=receiver.token
+        )
+
+    if prefer_remote and await _remote():
         return True, "remote"
 
     if not prefer_remote:
         try:
-            accepted = await async_close_receiver(
-                receiver.host,
-                receiver.port,
-                token=receiver.token,
-            )
-            return accepted, "local"
+            return await _local(), "local"
         except ReceiverClientError:
-            if await remote.async_send_close(device_id=receiver.device_id):
+            if await _remote():
                 return True, "remote"
             raise
 
-    accepted = await async_close_receiver(
-        receiver.host,
-        receiver.port,
-        token=receiver.token,
-    )
-    return accepted, "local"
+    return await _local(), "local"
 
 
 async def _async_get_receiver_status_command(

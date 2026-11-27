@@ -30,7 +30,14 @@ data class ShowCommand(
      * "none", "pause" (pause other apps, resume after), "duck" (lower their volume) or
      * "mute" (mute the TV's media volume while the popup is up, then unmute).
      */
-    val mediaFocus: String = MEDIA_FOCUS_NONE
+    val mediaFocus: String = MEDIA_FOCUS_NONE,
+    /**
+     * Identifies what the popup shows (Home Assistant sends the camera entity).
+     * A new popup with the same key replaces that popup instead of opening another.
+     */
+    val popupKey: String? = null,
+    /** How much to darken the TV behind overlay popups, 0-80 percent. */
+    val dimPercent: Int = 0
 ) {
     val hasActions: Boolean
         get() = actions.isNotEmpty() && actionCallbackUrl != null
@@ -121,6 +128,8 @@ data class ShowCommand(
                     actions = OverlayAction.listFromJson(json),
                     buttonStyle = ButtonStyle.fromJson(json.optJSONObject("buttonStyle")),
                     mediaFocus = mediaFocusFrom(json.optString("mediaFocus", MEDIA_FOCUS_NONE)),
+                    popupKey = json.optString("popupKey").trim().ifBlank { null },
+                    dimPercent = json.optInt("dimPercent", 0).coerceIn(0, 80),
                     actionCallbackUrl = json.optString("actionCallbackUrl").trim().ifBlank { null }
                         ?.also {
                             require(it.startsWith("http://") || it.startsWith("https://")) {

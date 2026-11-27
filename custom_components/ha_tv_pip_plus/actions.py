@@ -23,6 +23,8 @@ DATA_ACTION_VIEW_REGISTERED = "overlay_action_view_registered"
 DEFAULT_ACTION_TTL_SECONDS = 30
 ACTION_TTL_GRACE_SECONDS = 15
 MAX_ACTIONS = 3
+# Popups a TV shows at once (matches the TV app's MAX_POPUPS).
+MAX_POPUPS_PER_TV = 3
 
 ATTR_ACTIONS = "actions"
 
@@ -52,6 +54,8 @@ class PendingAction:
     # Close the popup when this entity reaches this state (door secured).
     watch_entity: str | None = None
     secured_state: str | None = None
+    # Which popup on the TV this button belongs to (several can be up at once).
+    popup_key: str | None = None
 
 
 @dataclass
@@ -66,13 +70,32 @@ class PendingActionStore:
         specs: list[dict[str, Any]],
         *,
         ttl_seconds: int,
+        popup_key: str | None = None,
         now: float | None = None,
     ) -> list[dict[str, Any]]:
-        """Drop earlier actions for a receiver, store new ones, return wire payload."""
+        """Store one popup's buttons and return the wire payload.
+
+        A TV shows up to MAX_POPUPS_PER_TV popups at once, each with its own buttons:
+        buttons from an earlier popup of the same camera are replaced, and the
+        oldest popup's buttons are dropped once the TV is full. Without a popup
+        key, the popup replaces every earlier one on that TV.
+        """
 
         now = time.monotonic() if now is None else now
         self.prune(now)
-        self.clear_device(device_id)
+        if popup_key is None:
+            self.clear_device(device_id)
+        else:
+            self.clear_popup(device_id, popup_key)
+            keys = list(
+                dict.fromkeys(
+                    value.popup_key
+                    for value in self.actions.values()
+                    if value.device_id == device_id
+                )
+            )
+            for old_key in keys[: max(0, len(keys) - (MAX_POPUPS_PER_TV - 1))]:
+                self.clear_popup(device_id, old_key)
         wire: list[dict[str, Any]] = []
         for spec in specs:
             domain, service = spec["action"].split(".", 1)
@@ -89,6 +112,7 @@ class PendingActionStore:
                 follow_up=spec.get("follow_up"),
                 watch_entity=spec.get("watch_entity"),
                 secured_state=spec.get("secured_state"),
+                popup_key=popup_key,
             )
             item: dict[str, Any] = {
                 "id": action_id,
@@ -116,8 +140,21 @@ class PendingActionStore:
         action = self.actions.get(action_id)
         if action is None or action.device_id != device_id:
             return None
-        self.clear_device(device_id)
+        self.clear_popup(device_id, action.popup_key)
         return action
+
+    def clear_popup(self, device_id: str, popup_key: str | None) -> None:
+        """Forget one popup's buttons (every button on the TV if there's no key)."""
+
+        if popup_key is None:
+            self.clear_device(device_id)
+            return
+        for action_id in [
+            key
+            for key, value in self.actions.items()
+            if value.device_id == device_id and value.popup_key == popup_key
+        ]:
+            self.actions.pop(action_id, None)
 
     def clear_device(self, device_id: str) -> None:
         for action_id in [
@@ -360,6 +397,7 @@ def async_close_when_secured(
     secured_state: str,
     *,
     give_up_after: int = FOLLOW_UP_TTL_SECONDS,
+    popup_key: str | None = None,
 ) -> None:
     """Close the receiver's popup once `entity_id` is back to `secured_state`.
 
@@ -373,7 +411,8 @@ def async_close_when_secured(
     )
 
     watchers = hass.data.setdefault(DOMAIN, {}).setdefault(DATA_SECURED_WATCHERS, {})
-    previous = watchers.pop(device_id, None)
+    watch_key = (device_id, popup_key)
+    previous = watchers.pop(watch_key, None)
     if previous:
         previous()
 
@@ -383,16 +422,16 @@ def async_close_when_secured(
         for unsubscribe in unsubscribers:
             unsubscribe()
         unsubscribers.clear()
-        if watchers.get(device_id) is _stop:
-            watchers.pop(device_id, None)
+        if watchers.get(watch_key) is _stop:
+            watchers.pop(watch_key, None)
 
     async def _async_state_changed(event: Any) -> None:
         new_state = event.data.get("new_state")
         if new_state is None or new_state.state != secured_state:
             return
         _stop()
-        pending_action_store(hass).clear_device(device_id)
-        await _async_close_receiver_popup(hass, device_id)
+        pending_action_store(hass).clear_popup(device_id, popup_key)
+        await _async_close_receiver_popup(hass, device_id, popup_key)
 
     async def _async_timeout(_now: Any) -> None:
         _stop()
@@ -403,10 +442,12 @@ def async_close_when_secured(
     unsubscribers.append(
         async_call_later(hass, give_up_after, _async_timeout)
     )
-    watchers[device_id] = _stop
+    watchers[watch_key] = _stop
 
 
-async def _async_close_receiver_popup(hass: Any, device_id: str) -> None:
+async def _async_close_receiver_popup(
+    hass: Any, device_id: str, popup_key: str | None = None
+) -> None:
     from .const import CONF_DEVICE_ID
     from .remote import remote_registry
     from .services import (
@@ -426,6 +467,7 @@ async def _async_close_receiver_popup(hass: Any, device_id: str) -> None:
                 receiver,
                 remote,
                 prefer_remote=_prefer_remote_transport(receiver, remote),
+                popup_key=popup_key,
             )
         except Exception as error:  # noqa: BLE001
             _LOGGER.warning("Could not close the popup on %s: %s", device_id, error)
@@ -512,6 +554,7 @@ def _build_action_view() -> Any:
                     device_id,
                     [action.follow_up],
                     ttl_seconds=stay_seconds,
+                    popup_key=action.popup_key,
                 )
                 response["next"] = wire[0]
                 response["stayOpenSeconds"] = stay_seconds
@@ -522,6 +565,7 @@ def _build_action_view() -> Any:
                     action.watch_entity,
                     action.secured_state,
                     give_up_after=stay_seconds,
+                    popup_key=action.popup_key,
                 )
             return self.json(response)
 

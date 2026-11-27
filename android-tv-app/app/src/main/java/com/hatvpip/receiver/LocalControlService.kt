@@ -157,8 +157,25 @@ class LocalControlService : Service() {
     private fun canDrawOverlays(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M || android.provider.Settings.canDrawOverlays(this)
 
-    private fun closePlayer() {
+    private fun closePlayer(popupKey: String? = null) {
         val playback = ReceiverRuntimeState.snapshot()
+        if (popupKey != null && playback.mode == ReceiverPlaybackMode.Overlay) {
+            // Close only that camera's popup; any others stay up.
+            startService(
+                Intent(this, OverlayPlayerService::class.java)
+                    .setAction(OverlayPlayerService.ACTION_CLOSE_POPUP)
+                    .putExtra(PlayerActivity.EXTRA_POPUP_KEY, popupKey)
+            )
+            return
+        }
+        if (playback.mode == ReceiverPlaybackMode.Overlay) {
+            // Let the popups fade out instead of vanishing.
+            startService(
+                Intent(this, OverlayPlayerService::class.java)
+                    .setAction(OverlayPlayerService.ACTION_STOP)
+            )
+            return
+        }
         stopService(
             Intent(this, OverlayPlayerService::class.java)
                 .setAction(OverlayPlayerService.ACTION_STOP)

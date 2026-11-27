@@ -322,4 +322,21 @@ class ShowCommandTest {
         val actions = listOf(OverlayAction(id = "a", label = "Unlock", icon = "unlock", confirm = true))
         assertEquals(actions, OverlayAction.listFromJsonString(OverlayAction.listToJsonString(actions)))
     }
+
+    @Test
+    fun parsesPopupKeyAndDimPercent() {
+        val command = ShowCommand.fromJson(
+            """{"url": "https://example.com/a.jpg", "streamType": "snapshot",
+               "popupKey": "camera.front_door", "dimPercent": 95}"""
+        ).getOrThrow()
+
+        assertEquals("camera.front_door", command.popupKey)
+        assertEquals(80, command.dimPercent)
+
+        val plain = ShowCommand.fromJson(
+            """{"url": "https://example.com/a.jpg", "streamType": "snapshot"}"""
+        ).getOrThrow()
+        assertEquals(null, plain.popupKey)
+        assertEquals(0, plain.dimPercent)
+    }
 }

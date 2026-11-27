@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 class RemoteReceiverClient(
     private val context: Context,
     private val onShow: (ShowCommand) -> Unit,
-    private val onClose: () -> Unit,
+    private val onClose: (String?) -> Unit,
     private val client: OkHttpClient = defaultClient()
 ) {
     private var webSocket: WebSocket? = null
@@ -138,7 +138,9 @@ class RemoteReceiverClient(
             }
             "close" -> {
                 RemoteConnectionRuntimeState.markMessage()
-                onClose()
+                val popupKey = data.optJSONObject("payload")?.optString("popupKey")
+                    ?.trim()?.ifBlank { null }
+                onClose(popupKey)
             }
             "status" -> {
                 RemoteConnectionRuntimeState.markMessage()

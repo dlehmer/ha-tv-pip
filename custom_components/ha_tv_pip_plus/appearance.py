@@ -78,6 +78,8 @@ DEFAULT_APPEARANCE: dict[str, Any] = {
     "unlocked_stay_minutes": 15,
     "media_behavior": MEDIA_KEEP_PLAYING,
     "auto_update_tv_apps": True,
+    # Darken the TV behind overlay popups so the camera stands out.
+    "dim_background": 30,
 }
 
 LIMITS = {
@@ -91,6 +93,7 @@ LIMITS = {
     "button_corner_radius": (0, 40),
     "popup_duration": (5, 600),
     "unlocked_stay_minutes": (1, 120),
+    "dim_background": (0, 80),
 }
 
 

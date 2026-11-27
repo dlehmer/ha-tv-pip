@@ -111,13 +111,15 @@ class RemoteReceiverRegistry:
         )
         return True
 
-    async def async_send_close(self, *, device_id: str) -> bool:
-        """Send a close command to a connected remote receiver."""
+    async def async_send_close(
+        self, *, device_id: str, popup_key: str | None = None
+    ) -> bool:
+        """Send a close command (for one popup, if given) to a remote receiver."""
 
-        return self._send_command_event(
-            device_id=device_id,
-            data={"command": "close"},
-        )
+        data: dict[str, Any] = {"command": "close"}
+        if popup_key:
+            data["payload"] = {"popupKey": popup_key}
+        return self._send_command_event(device_id=device_id, data=data)
 
     async def async_get_status(
         self,

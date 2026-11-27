@@ -394,6 +394,8 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_ACTION_CALLBACK_URL = "com.hatvpip.receiver.extra.ACTION_CALLBACK_URL"
         const val EXTRA_BUTTON_STYLE_JSON = "com.hatvpip.receiver.extra.BUTTON_STYLE_JSON"
         const val EXTRA_MEDIA_FOCUS = "com.hatvpip.receiver.extra.MEDIA_FOCUS"
+        const val EXTRA_POPUP_KEY = "com.hatvpip.receiver.extra.POPUP_KEY"
+        const val EXTRA_DIM_PERCENT = "com.hatvpip.receiver.extra.DIM_PERCENT"
         const val TEST_STREAM_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
         private const val REMOTE_PIP_DELAY_MS = 750L
 
@@ -480,6 +482,8 @@ private fun Intent.toShowCommand(): ShowCommand =
 
 internal fun Intent.putActionExtras(command: ShowCommand): Intent {
     putExtra(PlayerActivity.EXTRA_MEDIA_FOCUS, command.mediaFocus)
+    command.popupKey?.let { putExtra(PlayerActivity.EXTRA_POPUP_KEY, it) }
+    putExtra(PlayerActivity.EXTRA_DIM_PERCENT, command.dimPercent)
     if (command.hasActions) {
         putExtra(PlayerActivity.EXTRA_ACTIONS_JSON, OverlayAction.listToJsonString(command.actions))
         putExtra(PlayerActivity.EXTRA_ACTION_CALLBACK_URL, command.actionCallbackUrl)

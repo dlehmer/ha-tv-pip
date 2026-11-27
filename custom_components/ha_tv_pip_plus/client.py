@@ -59,6 +59,11 @@ class ShowCameraCommand:
     action_callback_url: str | None = None
     button_style: dict[str, Any] | None = None
     media_focus: str | None = None
+    # What the popup shows (the camera entity): the TV replaces a popup with the
+    # same key instead of opening another, and can close just that one.
+    popup_key: str | None = None
+    # How much the TV darkens behind overlay popups, 0-80 percent.
+    dim_percent: int | None = None
 
 
 def show_camera_payload(command: ShowCameraCommand) -> dict[str, Any]:
@@ -103,6 +108,10 @@ def show_camera_payload(command: ShowCameraCommand) -> dict[str, Any]:
         payload["height"] = command.height
     if command.media_focus and command.media_focus != "none":
         payload["mediaFocus"] = command.media_focus
+    if command.popup_key:
+        payload["popupKey"] = command.popup_key
+    if command.dim_percent:
+        payload["dimPercent"] = command.dim_percent
     if command.actions and command.action_callback_url:
         payload["actions"] = [dict(action) for action in command.actions]
         payload["actionCallbackUrl"] = command.action_callback_url
@@ -347,10 +356,13 @@ def receiver_status_from_payload(response: dict[str, Any]) -> ReceiverStatus:
     )
 
 
-async def async_close_receiver(host: str, port: int, *, token: str) -> bool:
-    """Ask the paired receiver to close the active display."""
+async def async_close_receiver(
+    host: str, port: int, *, token: str, popup_key: str | None = None
+) -> bool:
+    """Ask the paired receiver to close the display, or just one popup on it."""
 
-    response = await asyncio.to_thread(_post_json, host, port, "/close", {}, token)
+    body = {"popupKey": popup_key} if popup_key else {}
+    response = await asyncio.to_thread(_post_json, host, port, "/close", body, token)
     return bool(response.get("accepted", False))
 
 

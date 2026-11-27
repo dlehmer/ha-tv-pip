@@ -1,5 +1,12 @@
 # What's New ✨
 
+## 1.38.0 - Several Cameras at Once 📹
+
+- Up to three cameras on screen at once, each with its own door button 📹
+- Press OK on the video to fill the screen; Down for the door button ⛶
+- The TV dims behind popups so the camera stands out 🌗
+- Popups fade out, and your show resumes as they do ✨
+
 ## 1.37.5 - TV App Updates Fixed 📺
 
 - TV app updates no longer get stuck on "installing" after Home Assistant starts 🔄

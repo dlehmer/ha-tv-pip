@@ -615,6 +615,22 @@ battery doorbells only send a small (for example 720×720), heavily compressed p
 Stills are kept in memory for 15 minutes behind a random, single-purpose URL. They are
 only used when Home Assistant turned the TV on; a TV that was already on gets live video.
 
+## Several Cameras at Once 📹
+
+A TV shows up to three camera popups side by side, each with its own door button. The
+first opens full size; ones that arrive while it's up open smaller next to it. The same
+camera again replaces its own popup, and a fourth camera closes the oldest. Only one
+popup has the remote at a time: Left/Right moves between them.
+
+**Full screen:** on a popup with a door button, the video gets the remote first. Press
+OK to fill the screen (the button stays along the bottom), OK or Back to shrink it again,
+and Down to reach the button.
+
+**Dimming and fading:** the TV is darkened behind popups (**Darken the TV behind
+popups**, default 30%, in the **Popups, buttons and updates** section). When a popup
+closes it fades out over 1.5 seconds, and whatever was paused resumes a second before
+the fade ends. These need TV app 1.38.0 or newer.
+
 ## Do Not Disturb 🔕
 
 Each TV has its own do not disturb, set in Home Assistant (never on the TV). While it's

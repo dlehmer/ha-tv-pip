@@ -19,7 +19,8 @@ class LocalControlServer(
     private val context: Context,
     private val port: Int = DEFAULT_PORT,
     private val onShow: (ShowCommand) -> Unit,
-    private val onClose: () -> Unit,
+    /** Close everything, or only the popup with this key (null = everything). */
+    private val onClose: (String?) -> Unit,
     private val onOpenManagement: () -> Unit,
     private val onRemoteSettingsChanged: () -> Unit = {},
     private val onPairingChanged: () -> Unit = {},
@@ -268,7 +269,9 @@ class LocalControlServer(
 
         val playback = ReceiverRuntimeState.snapshot()
         val wasActive = playback.mode != ReceiverPlaybackMode.Idle
-        onClose()
+        val popupKey = runCatching { JSONObject(request.body).optString("popupKey") }
+            .getOrNull()?.trim()?.ifBlank { null }
+        onClose(popupKey)
         return HttpResponse.json(
             status = 202,
             body = JSONObject()

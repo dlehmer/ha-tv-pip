@@ -164,7 +164,11 @@
               "popup_duration": "How long popups stay up",
               "unlocked_stay_minutes": "After unlocking or opening, stay up until secured, for at most",
               "media_behavior": "When a popup appears, what's playing on the TV should",
-              "auto_update_tv_apps": "Update TV apps automatically (needs USB debugging on the TV)"
+              "auto_update_tv_apps": "Update TV apps automatically (needs USB debugging on the TV)",
+              "dim_background": "Darken the TV behind popups"
+            },
+            "data_description": {
+              "dim_background": "Dims what's on the TV while a popup is up, so the camera stands out (0% = off). Needs TV app 1.38.0 or newer."
             }
           },
           "advanced": {

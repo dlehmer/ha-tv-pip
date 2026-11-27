@@ -1027,6 +1027,9 @@ def appearance_form_fields(current: dict[str, Any]) -> dict[Any, Any]:
             MEDIA_BEHAVIORS, "media_behavior"
         ),
         vol.Required(
+            "dim_background", default=current["dim_background"]
+        ): number(0, 80, "%", slider=True),
+        vol.Required(
             "auto_update_tv_apps", default=current["auto_update_tv_apps"]
         ): bool,
     }
