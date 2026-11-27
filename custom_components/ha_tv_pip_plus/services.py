@@ -1836,10 +1836,15 @@ def _with_overlay_actions(
                     f"Unknown action {spec['action']} for button '{spec['label']}'",
                 )
 
+    # A popup stays up once its button is selected on the TV, so its buttons stay
+    # valid for as long as an unlocked door keeps a popup up.
     wire_actions = store.replace_for_device(
         receiver.device_id,
         specs,
-        ttl_seconds=command.duration_seconds or DEFAULT_ACTION_TTL_SECONDS,
+        ttl_seconds=max(
+            command.duration_seconds or DEFAULT_ACTION_TTL_SECONDS,
+            int(popup_appearance(hass)["unlocked_stay_minutes"]) * 60,
+        ),
         popup_key=popup_key,
     )
     callback_url = _absolute_stream_url(

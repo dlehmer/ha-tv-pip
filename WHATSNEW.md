@@ -1,5 +1,11 @@
 # What's New ✨
 
+## 1.38.1 - Back Closes Everything ↩️
+
+- Back closes every camera popup at once and resumes your show ↩️
+- When a popup times out, the others slide over and the first grows to full size 🔄
+- A popup whose button you've selected stays until you dismiss it 📌
+
 ## 1.38.0 - Several Cameras at Once 📹
 
 - Up to three cameras on screen at once, each with its own door button 📹

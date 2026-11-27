@@ -1,5 +1,6 @@
 package com.hatvpip.receiver
 
+import android.animation.ValueAnimator
 import android.app.Service
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -90,15 +91,18 @@ class OverlayPlayerService : Service() {
         popups.firstOrNull { it.expanded }?.setExpanded(false)
         val sameCamera = popup.key?.let { key -> popups.firstOrNull { it.key == key } }
         if (sameCamera != null) {
+            // Same camera again: take over its place and size.
             popup.slot = sameCamera.slot
+            popup.compact = sameCamera.compact
             removePopup(sameCamera)
         } else {
             while (popups.size >= MAX_POPUPS) {
                 removePopup(popups.first())
             }
-            popup.slot = (0 until MAX_POPUPS).first { slot -> popups.none { it.slot == slot } }
+            reflow()
+            popup.slot = popups.size
+            popup.compact = popups.isNotEmpty()
         }
-        popup.compact = popups.isNotEmpty() || popup.slot > 0
         // The dark layer goes in first so it sits underneath every popup.
         showDim(popup.dimPercent)
         popups += popup
@@ -136,13 +140,14 @@ class OverlayPlayerService : Service() {
             if (popups.isEmpty()) {
                 removeDim()
                 stopSelf()
-            } else {
+            } else if (!closingAll) {
+                reflow()
                 popups.lastOrNull { it.actions.isNotEmpty() && !it.closing }?.let { focusPopup(it) }
             }
         }
     }
 
-    /** Fade everything out, then stop. */
+    /** Fade every popup out together, then stop; what was playing resumes as they fade. */
     private fun closeAll() {
         if (closingAll) return
         if (popups.isEmpty()) {
@@ -202,6 +207,16 @@ class OverlayPlayerService : Service() {
         }
     }
 
+    /**
+     * Close the gaps: the remaining popups slide over in order, and whichever is first
+     * grows to full size while the others stay compact.
+     */
+    private fun reflow() {
+        popups.filter { !it.closing }.sortedBy { it.slot }.forEachIndexed { index, popup ->
+            popup.moveTo(slot = index, compact = index > 0)
+        }
+    }
+
     private fun removePopup(popup: Popup) {
         popup.remove()
         popups.remove(popup)
@@ -257,6 +272,7 @@ class OverlayPlayerService : Service() {
         var overlayView: ViewGroup? = null
         private var textOverlayView: ViewGroup? = null
         var mediaParams: WindowManager.LayoutParams? = null
+        private var footerParams: WindowManager.LayoutParams? = null
         private var player: ExoPlayer? = null
         private var errorTextView: TextView? = null
         private var title: String = intent?.getStringExtra(PlayerActivity.EXTRA_TITLE) ?: ""
@@ -447,6 +463,7 @@ class OverlayPlayerService : Service() {
             applyBackgroundBlur(footerParams)
 
             this.mediaParams = mediaParams
+            this.footerParams = footerParams
             return runCatching {
                 mediaRoot.alpha = 0f
                 footer.alpha = 0f
@@ -623,7 +640,7 @@ class OverlayPlayerService : Service() {
                         KeyEvent.KEYCODE_BACK -> {
                             if (event.action == KeyEvent.ACTION_UP) {
                                 AppLog.playbackStop(reason = "overlay_back_pressed")
-                                closePopup(this@Popup)
+                                closeAll()
                             }
                             true
                         }
@@ -642,6 +659,11 @@ class OverlayPlayerService : Service() {
                     }
                 }
                 setOnFocusChangeListener { view, hasFocus ->
+                    if (hasFocus && !closing && !actionInFlight) {
+                        // On a button: this popup stays until it's dismissed (or the door is
+                        // used), instead of timing out under the remote.
+                        autoCloseHandler.removeCallbacksAndMessages(null)
+                    }
                     view.animate().scaleX(if (hasFocus) 1.04f else 1f)
                         .scaleY(if (hasFocus) 1.04f else 1f)
                         .setDuration(120)
@@ -1128,7 +1150,7 @@ class OverlayPlayerService : Service() {
 
         /**
          * The video can be selected with the remote: OK makes it fill the screen (and back),
-         * Down goes to the door button, Back shrinks it or closes the popup.
+         * Down goes to the door button, Back closes every popup.
          */
         private fun makeVideoSelectable(media: FrameLayout) {
             media.isFocusable = true
@@ -1151,12 +1173,8 @@ class OverlayPlayerService : Service() {
                 when (keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
                         if (event.action == KeyEvent.ACTION_UP) {
-                            if (expanded) {
-                                setExpanded(false)
-                            } else {
-                                AppLog.playbackStop(reason = "overlay_back_pressed")
-                                closePopup(this@Popup)
-                            }
+                            AppLog.playbackStop(reason = "overlay_back_pressed")
+                            closeAll()
                         }
                         true
                     }
@@ -1208,6 +1226,68 @@ class OverlayPlayerService : Service() {
             val visibility = if (hidden) View.INVISIBLE else View.VISIBLE
             overlayView?.visibility = visibility
             textOverlayView?.visibility = visibility
+        }
+
+        /**
+         * Slide to another slot and grow or shrink to match it, animated. Used when a
+         * popup beside this one closes.
+         */
+        fun moveTo(slot: Int, compact: Boolean) {
+            if (slot == this.slot && compact == this.compact) return
+            val view = overlayView
+            val params = mediaParams
+            if (view == null || params == null || expanded) {
+                this.slot = slot
+                this.compact = compact
+                return
+            }
+            val media = mediaContainerView
+            val mediaFixed = (media?.layoutParams?.height ?: 0) > 0
+            val windowFixed = params.height > 0
+            val fromWidth = params.width
+            val fromX = params.x
+            val fromHeight = if (mediaFixed) media!!.layoutParams.height else params.height
+            this.slot = slot
+            this.compact = compact
+            val toWidth = overlayWidth()
+            val toX = slotX()
+            val toHeight = if (mediaFixed) mediaHeightPx() else if (windowFixed) {
+                if (textOverlayView != null) mediaHeightPx() else overlayHeight()
+            } else {
+                fromHeight
+            }
+            ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = RESIZE_MS
+                addUpdateListener { animator ->
+                    if (overlayView == null) return@addUpdateListener
+                    val f = animator.animatedFraction
+                    fun lerp(from: Int, to: Int): Int = from + ((to - from) * f).toInt()
+                    params.width = lerp(fromWidth, toWidth)
+                    params.x = lerp(fromX, toX)
+                    if (mediaFixed) {
+                        media!!.layoutParams = media.layoutParams.apply {
+                            height = lerp(fromHeight, toHeight)
+                        }
+                    } else if (windowFixed) {
+                        params.height = lerp(fromHeight, toHeight)
+                    }
+                    runCatching { windowManager.updateViewLayout(view, params) }
+                    moveFooter(params)
+                }
+                start()
+            }
+        }
+
+        /** Keep a separate text footer window lined up under (or over) the video. */
+        private fun moveFooter(media: WindowManager.LayoutParams) {
+            val footer = textOverlayView ?: return
+            val params = footerParams ?: return
+            params.width = media.width
+            params.x = media.x
+            if (!isBottomPosition()) {
+                params.y = OVERLAY_MARGIN_PX + media.height
+            }
+            runCatching { windowManager.updateViewLayout(footer, params) }
         }
 
         /** Fade to transparent, then [done] (which removes the popup). */
@@ -1407,6 +1487,8 @@ class OverlayPlayerService : Service() {
         const val MAX_POPUPS = 3
         private const val MAX_DIM_PERCENT = 80
         private const val FADE_IN_MS = 250L
+        /** How long a popup takes to slide and grow into a freed-up place. */
+        private const val RESIZE_MS = 400L
         /** Popups fade from opaque to transparent over this long when they close. */
         private const val FADE_OUT_MS = 1_500L
         /** What was playing resumes this long before the fade-out finishes. */
