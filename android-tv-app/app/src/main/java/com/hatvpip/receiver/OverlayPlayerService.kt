@@ -179,7 +179,7 @@ class OverlayPlayerService : Service() {
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
-        )
+        ).apply { windowAnimations = 0 }
         runCatching { windowManager.addView(view, params) }
             .onSuccess {
                 dimView = view
@@ -195,6 +195,8 @@ class OverlayPlayerService : Service() {
     private fun removeDim() {
         dimView?.let { view ->
             view.animate().cancel()
+            view.alpha = 0f
+            view.visibility = View.INVISIBLE
             runCatching { windowManager.removeView(view) }
         }
         dimView = null
@@ -504,6 +506,8 @@ class OverlayPlayerService : Service() {
                 gravity = overlayGravity()
                 x = slotX()
                 y = yOffset
+                // We fade popups ourselves; no extra system animation when they're removed.
+                windowAnimations = 0
             }
 
         private fun measureFooterHeight(footer: View): Int {
@@ -1300,9 +1304,31 @@ class OverlayPlayerService : Service() {
             views.forEach { view ->
                 view.animate().alpha(0f).setDuration(FADE_OUT_MS).withEndAction {
                     remaining -= 1
-                    if (remaining == 0) done()
+                    if (remaining == 0) finishFade(views, done)
                 }.start()
             }
+        }
+
+        /**
+         * Once faded, make sure nothing can be drawn again before the windows go: stop the
+         * video, hide the views and make the windows themselves fully transparent, then
+         * remove them on a later frame. Removing a window that's still showing video can
+         * flash its last frame back on screen.
+         */
+        private fun finishFade(views: List<View>, done: () -> Unit) {
+            player?.let { exoPlayer ->
+                exoPlayer.playWhenReady = false
+                exoPlayer.clearVideoSurface()
+            }
+            mjpegRunning = false
+            views.forEach { view ->
+                view.alpha = 0f
+                view.visibility = View.INVISIBLE
+                val params = view.layoutParams as? WindowManager.LayoutParams ?: return@forEach
+                params.alpha = 0f
+                runCatching { windowManager.updateViewLayout(view, params) }
+            }
+            serviceHandler.postDelayed({ done() }, WINDOW_REMOVE_DELAY_MS)
         }
 
         /** Removes this popup's windows and stops its video. */
@@ -1489,6 +1515,8 @@ class OverlayPlayerService : Service() {
         private const val FADE_IN_MS = 250L
         /** How long a popup takes to slide and grow into a freed-up place. */
         private const val RESIZE_MS = 400L
+        /** Wait a couple of frames after hiding a faded popup before removing its window. */
+        private const val WINDOW_REMOVE_DELAY_MS = 50L
         /** Popups fade from opaque to transparent over this long when they close. */
         private const val FADE_OUT_MS = 1_500L
         /** What was playing resumes this long before the fade-out finishes. */

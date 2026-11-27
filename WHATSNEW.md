@@ -1,5 +1,9 @@
 # What's New ✨
 
+## 1.38.2 - Smoother Fade Out ✨
+
+- Popups no longer flash back on at the end of fading out ✨
+
 ## 1.38.1 - Back Closes Everything ↩️
 
 - Back closes every camera popup at once and resumes your show ↩️
