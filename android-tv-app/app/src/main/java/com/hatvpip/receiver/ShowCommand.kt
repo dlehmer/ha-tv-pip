@@ -26,7 +26,10 @@ data class ShowCommand(
     val actions: List<OverlayAction> = emptyList(),
     val actionCallbackUrl: String? = null,
     val buttonStyle: ButtonStyle = ButtonStyle(),
-    /** "none", "pause" (pause other apps, resume after) or "duck" (lower their volume). */
+    /**
+     * "none", "pause" (pause other apps, resume after), "duck" (lower their volume) or
+     * "mute" (mute the TV's media volume while the popup is up, then unmute).
+     */
     val mediaFocus: String = MEDIA_FOCUS_NONE
 ) {
     val hasActions: Boolean
@@ -137,10 +140,11 @@ data class ShowCommand(
 const val MEDIA_FOCUS_NONE = "none"
 const val MEDIA_FOCUS_PAUSE = "pause"
 const val MEDIA_FOCUS_DUCK = "duck"
+const val MEDIA_FOCUS_MUTE = "mute"
 
 fun mediaFocusFrom(value: String?): String =
     when (value) {
-        MEDIA_FOCUS_PAUSE, MEDIA_FOCUS_DUCK -> value
+        MEDIA_FOCUS_PAUSE, MEDIA_FOCUS_DUCK, MEDIA_FOCUS_MUTE -> value
         else -> MEDIA_FOCUS_NONE
     }
 

@@ -1,0 +1,2 @@
+- Each TV can pause, mute, lower the volume or keep playing during popups 🔇
+- New mute option: the TV is muted while the popup is up, then unmuted 🔈

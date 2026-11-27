@@ -139,3 +139,19 @@ def test_popup_duration_applies_only_when_not_set() -> None:
         _Timed(duration_seconds=45), {}, look, camera_title="Cam"
     )
     assert receiver_default.duration_seconds == 45
+
+
+def test_media_behavior_is_per_tv_with_a_shared_fallback() -> None:
+    import types
+
+    from custom_components.ha_tv_pip_plus.appearance import (
+        media_behavior_for,
+        tv_media_behavior,
+    )
+
+    hass = types.SimpleNamespace(data={})
+    assert tv_media_behavior({}) == "shared"
+    assert tv_media_behavior({"tv_media_behavior": "loud"}) == "shared"
+    assert media_behavior_for(hass, {}) == "none"
+    assert media_behavior_for(hass, {"tv_media_behavior": "mute"}) == "mute"
+    assert media_behavior_for(hass, {"tv_media_behavior": "pause"}) == "pause"

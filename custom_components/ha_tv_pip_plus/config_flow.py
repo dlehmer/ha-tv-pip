@@ -24,12 +24,15 @@ from .adb_setup import (
 )
 from .appearance import (
     BUTTON_SHAPES,
+    CONF_TV_MEDIA_BEHAVIOR,
     MEDIA_BEHAVIORS,
     TEXT_MODES,
+    TV_MEDIA_BEHAVIORS,
     async_save_appearance,
     hex_to_rgb,
     normalize_appearance,
     popup_appearance,
+    tv_media_behavior,
 )
 from .client import (
     ReceiverClientError,
@@ -604,6 +607,7 @@ def _current_option_values(entry: Any, hass: Any | None) -> dict[str, Any]:
         CONF_DEFAULT_DURATION_SECONDS: basic.get(CONF_DEFAULT_DURATION_SECONDS, 0),
         CONF_DEFAULT_SNAPSHOT_FALLBACK: basic[CONF_DEFAULT_SNAPSHOT_FALLBACK],
         CONF_PREFER_REMOTE_TRANSPORT: basic[CONF_PREFER_REMOTE_TRANSPORT],
+        CONF_TV_MEDIA_BEHAVIOR: tv_media_behavior(entry.options),
         SECTION_POWER: {
             CONF_POWER_ENTITY: basic.get(CONF_POWER_ENTITY, ""),
             CONF_WAKE_MODE: schedule[CONF_WAKE_MODE],
@@ -731,6 +735,9 @@ def _options_from_values(
         prefer_remote_transport=bool(values.get(CONF_PREFER_REMOTE_TRANSPORT)),
         power_entity=str(power.get(CONF_POWER_ENTITY) or "").strip(),
     )
+    options[CONF_TV_MEDIA_BEHAVIOR] = tv_media_behavior(
+        {CONF_TV_MEDIA_BEHAVIOR: values.get(CONF_TV_MEDIA_BEHAVIOR)}
+    )
     options[CONF_DEFAULT_POSITION] = position
     if width > 0:
         options[CONF_DEFAULT_WIDTH] = width
@@ -824,6 +831,9 @@ def _options_schema(values: dict[str, Any]) -> dict[Any, Any]:
             CONF_PREFER_REMOTE_TRANSPORT,
             default=bool(values[CONF_PREFER_REMOTE_TRANSPORT]),
         ): bool,
+        vol.Optional(
+            CONF_TV_MEDIA_BEHAVIOR, default=values[CONF_TV_MEDIA_BEHAVIOR]
+        ): _choice_selector(TV_MEDIA_BEHAVIORS, "tv_media_behavior"),
         vol.Required(SECTION_POWER): _section(
             {
                 _optional_suggested(

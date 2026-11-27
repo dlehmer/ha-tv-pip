@@ -20,7 +20,12 @@ from .actions import (
     default_action_spec,
     pending_action_store,
 )
-from .appearance import apply_appearance, button_style_payload, popup_appearance
+from .appearance import (
+    apply_appearance,
+    button_style_payload,
+    media_behavior_for,
+    popup_appearance,
+)
 from .client import (
     ReceiverCapabilities,
     ReceiverClientError,
@@ -1804,7 +1809,7 @@ def _with_overlay_actions(
 
     store = pending_action_store(hass)
     command = replace(
-        command, media_focus=popup_appearance(hass)["media_behavior"]
+        command, media_focus=media_behavior_for(hass, receiver.options)
     )
     if ATTR_ACTIONS in call.data:
         # Explicit buttons from the automation win; `actions: []` hides buttons.

@@ -87,10 +87,12 @@
           "default_duration_seconds": "Default duration",
           "default_snapshot_fallback": "Snapshot fallback by default",
           "prefer_remote_transport": "Prefer remote transport",
-          "send_test_popup": "Send a test popup to this TV after saving"
+          "send_test_popup": "Send a test popup to this TV after saving",
+          "tv_media_behavior": "When a popup appears on this TV, what's playing should"
         },
         "data_description": {
-          "send_test_popup": "Right after you save, your doorbell camera pops up with its door button, just like a real ring (the TV is turned on if your turn-on setting allows it). The button is only a test: pressing it shows a notification in Home Assistant and never unlocks or opens anything. Do not disturb is ignored for the test. Without a door-button camera, a short test video is shown."
+          "send_test_popup": "Right after you save, your doorbell camera pops up with its door button, just like a real ring (the TV is turned on if your turn-on setting allows it). The button is only a test: pressing it shows a notification in Home Assistant and never unlocks or opens anything. Do not disturb is ignored for the test. Without a door-button camera, a short test video is shown.",
+          "tv_media_behavior": "Choose \"Use the setting for all TVs\" to follow the setting in Popups, buttons and updates. Pausing works with most streaming apps (they pause and resume); some live-TV apps may ignore it. Mute silences the TV while the popup is up and unmutes it afterwards (needs TV app 1.37.3 or newer)."
         },
         "sections": {
           "turn_tv_on": {
@@ -324,6 +326,16 @@
           "live": "Live video",
           "still_then_live": "Still, then live video",
           "still": "Only a still"
+        }
+      },
+      "tv_media_behavior": {
+        "name": "During popups, what's playing should",
+        "state": {
+          "shared": "Same as all TVs",
+          "none": "Keep playing",
+          "pause": "Pause",
+          "duck": "Lower the volume",
+          "mute": "Mute"
         }
       }
     }
@@ -790,7 +802,8 @@
       "options": {
         "none": "Keep playing",
         "pause": "Pause, then resume after the popup",
-        "duck": "Keep playing, with the volume lowered"
+        "duck": "Keep playing, with the volume lowered",
+        "mute": "Be muted, then unmuted after the popup"
       }
     },
     "wake_tv": {
@@ -830,6 +843,15 @@
       "options": {
         "never": "Never (or set it up later)",
         "always": "Yes, whenever a popup comes in"
+      }
+    },
+    "tv_media_behavior": {
+      "options": {
+        "shared": "Use the setting for all TVs",
+        "none": "Keep playing",
+        "pause": "Pause, then resume after the popup",
+        "duck": "Keep playing, with the volume lowered",
+        "mute": "Be muted, then unmuted after the popup"
       }
     }
   }

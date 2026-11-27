@@ -1,5 +1,10 @@
 # What's New ✨
 
+## 1.37.3 - Pause, Mute or Keep Playing per TV 🔇
+
+- Each TV can pause, mute, lower the volume or keep playing during popups 🔇
+- New mute option: the TV is muted while the popup is up, then unmuted 🔈
+
 ## 1.37.2 - Doorbell Test Popup 🔔
 
 - Test popups show your doorbell with its Unlock button; the test button never unlocks anything 🔔

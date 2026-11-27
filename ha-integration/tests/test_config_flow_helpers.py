@@ -226,6 +226,7 @@ def test_options_flow_is_one_dialog_with_sections_and_test() -> None:
         CONF_DEFAULT_DURATION_SECONDS,
         CONF_DEFAULT_SNAPSHOT_FALLBACK,
         CONF_PREFER_REMOTE_TRANSPORT,
+        "tv_media_behavior",
         SECTION_POWER,
         SECTION_DND,
         SECTION_CAMERA_BUTTONS,
@@ -284,6 +285,7 @@ def test_options_flow_saves_everything_from_one_dialog() -> None:
                 CONF_DEFAULT_SNAPSHOT_FALLBACK: False,
                 CONF_DEFAULT_STREAM_TYPE: "mjpeg_first",
                 CONF_PREFER_REMOTE_TRANSPORT: False,
+                "tv_media_behavior": "mute",
                 SECTION_POWER: {
                     CONF_POWER_ENTITY: "remote.living_room_tv",
                     CONF_WAKE_MODE: "scheduled",
@@ -327,6 +329,7 @@ def test_options_flow_saves_everything_from_one_dialog() -> None:
             CONF_PREFER_REMOTE_TRANSPORT: False,
             CONF_REMOTE_ACCESS_TOKEN: "remote-token",
             CONF_REMOTE_HOME_ASSISTANT_URL: "https://ha.example.test",
+            "tv_media_behavior": "mute",
             CONF_DND: False,
             CONF_DND_ENTITY: "input_boolean.movie_night",
             CONF_DND_ENTITY_STATE: "off",

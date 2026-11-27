@@ -60,6 +60,7 @@ class OverlayPlayerService : Service() {
     private var buttonStyle: ButtonStyle = ButtonStyle()
     private var mediaFocus: String = MEDIA_FOCUS_NONE
     private var audioFocusRequest: AudioFocusRequest? = null
+    private var mutedMediaForPopup = false
     @Volatile private var mjpegRunning: Boolean = false
     private var mjpegThread: Thread? = null
     private val autoCloseHandler = Handler(Looper.getMainLooper())
@@ -933,7 +934,12 @@ class OverlayPlayerService : Service() {
      * duck, and resume on their own when the focus is given back in [removeOverlay].
      */
     private fun requestMediaFocus() {
+        if (mediaFocus == MEDIA_FOCUS_MUTE) {
+            muteMediaForPopup()
+            return
+        }
         if (mediaFocus == MEDIA_FOCUS_NONE || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (audioFocusRequest != null) return
         val audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
         val gain = if (mediaFocus == MEDIA_FOCUS_DUCK) {
             AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
@@ -954,7 +960,41 @@ class OverlayPlayerService : Service() {
             .onFailure { AppLog.error("Could not pause playback for the popup", it) }
     }
 
+    /**
+     * Mute the TV's media volume while the popup is up. Only unmuted again in
+     * [unmuteMediaAfterPopup] if it was this popup that muted it, so a TV the viewer
+     * had muted stays muted.
+     */
+    private fun muteMediaForPopup() {
+        if (mutedMediaForPopup) return
+        val audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
+        runCatching {
+            if (!audioManager.isStreamMute(AudioManager.STREAM_MUSIC)) {
+                audioManager.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.ADJUST_MUTE,
+                    0,
+                )
+                mutedMediaForPopup = true
+            }
+        }.onFailure { AppLog.error("Could not mute playback for the popup", it) }
+    }
+
+    private fun unmuteMediaAfterPopup() {
+        if (!mutedMediaForPopup) return
+        mutedMediaForPopup = false
+        val audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
+        runCatching {
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                AudioManager.ADJUST_UNMUTE,
+                0,
+            )
+        }.onFailure { AppLog.error("Could not unmute playback after the popup", it) }
+    }
+
     private fun abandonMediaFocus() {
+        unmuteMediaAfterPopup()
         val request = audioFocusRequest ?: return
         audioFocusRequest = null
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

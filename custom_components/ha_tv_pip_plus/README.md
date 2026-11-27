@@ -549,8 +549,11 @@ In the **Popups, buttons and updates (all TVs)** section of the **Configure** pa
   `duration_seconds` or the TV has its own default duration.
 - **After unlocking or opening** a door, the popup stays until it's secured, for at most
   the time you set (default 15 minutes).
-- **When a popup appears**, what's playing can keep playing, pause and resume after, or
-  keep playing more quietly. This uses Android audio focus, which Netflix, YouTube, Plex
+- **When a popup appears**, what's playing can keep playing, pause and resume after,
+  keep playing more quietly, or be muted and unmuted afterwards (mute needs TV app
+  1.37.3 or newer). Each TV can override this on its own **Configure** page or with its
+  **During popups, what's playing should** select; "Use the setting for all TVs" follows
+  the shared one. This uses Android audio focus, which Netflix, YouTube, Plex
   and most streaming apps follow; some live-TV apps may ignore it.
 
 ## Turning TVs On for Popups 📺

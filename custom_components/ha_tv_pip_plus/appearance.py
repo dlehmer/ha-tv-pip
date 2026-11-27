@@ -25,7 +25,29 @@ TEXT_MODES = (TEXT_MODE_NONE, TEXT_MODE_OVER_VIDEO, TEXT_MODE_BELOW_VIDEO)
 MEDIA_KEEP_PLAYING = "none"
 MEDIA_PAUSE = "pause"
 MEDIA_LOWER_VOLUME = "duck"
-MEDIA_BEHAVIORS = (MEDIA_KEEP_PLAYING, MEDIA_PAUSE, MEDIA_LOWER_VOLUME)
+MEDIA_MUTE = "mute"
+MEDIA_BEHAVIORS = (MEDIA_KEEP_PLAYING, MEDIA_PAUSE, MEDIA_LOWER_VOLUME, MEDIA_MUTE)
+
+# Per-TV choice; "shared" means use the setting shared by all TVs.
+CONF_TV_MEDIA_BEHAVIOR = "tv_media_behavior"
+MEDIA_SHARED = "shared"
+TV_MEDIA_BEHAVIORS = (MEDIA_SHARED, *MEDIA_BEHAVIORS)
+
+
+def tv_media_behavior(options: Any) -> str:
+    """This TV's own choice ("shared" when it follows the setting for all TVs)."""
+
+    value = str((options or {}).get(CONF_TV_MEDIA_BEHAVIOR) or MEDIA_SHARED)
+    return value if value in TV_MEDIA_BEHAVIORS else MEDIA_SHARED
+
+
+def media_behavior_for(hass: Any, options: Any) -> str:
+    """What playing media should do during a popup on the TV with `options`."""
+
+    own = tv_media_behavior(options)
+    if own != MEDIA_SHARED:
+        return own
+    return str(popup_appearance(hass)["media_behavior"])
 
 BUTTON_SHAPE_TILE = "tile"
 BUTTON_SHAPE_PILL = "pill"

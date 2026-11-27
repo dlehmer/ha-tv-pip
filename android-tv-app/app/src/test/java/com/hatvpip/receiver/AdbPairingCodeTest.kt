@@ -55,6 +55,11 @@ class MediaFocusTest {
         ).getOrThrow()
         org.junit.Assert.assertEquals(MEDIA_FOCUS_PAUSE, pause.mediaFocus)
 
+        val mute = ShowCommand.fromJson(
+            """{"url": "https://example.com/a.jpg", "streamType": "snapshot", "mediaFocus": "mute"}"""
+        ).getOrThrow()
+        org.junit.Assert.assertEquals(MEDIA_FOCUS_MUTE, mute.mediaFocus)
+
         val unknown = ShowCommand.fromJson(
             """{"url": "https://example.com/a.jpg", "streamType": "snapshot", "mediaFocus": "loud"}"""
         ).getOrThrow()

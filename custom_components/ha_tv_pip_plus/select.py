@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .appearance import CONF_TV_MEDIA_BEHAVIOR, TV_MEDIA_BEHAVIORS, tv_media_behavior
 from .schedule import (
     CONF_DND_ENTITY_STATE,
     CONF_WAKE_MODE,
@@ -51,6 +52,15 @@ async def async_setup_entry(hass: Any, entry: Any, async_add_entities: Any) -> N
                 name="Turn TV on for popups",
                 choices=WAKE_MODES,
                 icon="mdi:television-classic",
+            ),
+            ReceiverScheduleSelect(
+                hass,
+                entry,
+                key=CONF_TV_MEDIA_BEHAVIOR,
+                name="During popups, what's playing should",
+                choices=TV_MEDIA_BEHAVIORS,
+                icon="mdi:play-pause",
+                read=lambda entry: tv_media_behavior(entry.options),
             ),
             ReceiverScheduleSelect(
                 hass,
