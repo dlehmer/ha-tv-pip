@@ -2,14 +2,11 @@
 
 ## 1.37.0 - Do Not Disturb and One-Page Settings 🔕
 
-- Do not disturb per TV: a switch, an entity you pick (on or off, your choice), or set hours 🔕
-- Turn each TV on for popups never, always, or only between set times 📺
-- Show a still from the moment of the ring while a slow TV wakes, zoomed in if you like 🖼️
-- Fisheye doorbell stills can be flattened into a normal picture, zoomed and aimed 🔍
-- Or show the camera's own event picture (like Eufy's), which may already be centred on the person 🙂
-- Setup now explains finding the TV's IP, developer options and pairing the Android TV Remote 🧭
-- All TV settings on one page, with a Send a test popup box ✅
-- `ignore_do_not_disturb: true` lets important popups through 🚪
+- Do not disturb per TV: a switch, an entity you pick, or set hours 🔕
+- Turn each TV on for popups never, always, or between set times 📺
+- Show a still of the ring while a slow TV wakes: zoomed, flattened, or the camera's own picture 🖼️
+- All TV settings on one page, with a test popup ✅
+- Setup explains the TV's IP, developer options and Android TV Remote 🧭
 
 ## 1.36.1 - Update Fixes 🔧
 

@@ -1,0 +1,5 @@
+- Do not disturb per TV: a switch, an entity you pick, or set hours 🔕
+- Turn each TV on for popups never, always, or between set times 📺
+- Show a still of the ring while a slow TV wakes: zoomed, flattened, or the camera's own picture 🖼️
+- All TV settings on one page, with a test popup ✅
+- Setup explains the TV's IP, developer options and Android TV Remote 🧭
