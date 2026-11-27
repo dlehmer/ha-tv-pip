@@ -1,5 +1,11 @@
 # What's New ✨
 
+## 1.36.1 - Update Fixes 🔧
+
+- Fixed TV app updates getting stuck as "already in progress" 🔄
+- TVs update one at a time and share a single download 📦
+- Install failures are written to the Home Assistant log 📝
+
 ## 1.36.0 - Updates, Timing, Pause and Power 🔄
 
 - Update TV apps and this integration from Settings > Updates 🔄

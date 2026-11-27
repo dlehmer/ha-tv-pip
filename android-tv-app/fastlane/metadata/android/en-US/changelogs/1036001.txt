@@ -1,0 +1,3 @@
+- Fixed TV app updates getting stuck as "already in progress" 🔄
+- TVs update one at a time and share a single download 📦
+- Install failures are written to the Home Assistant log 📝

@@ -131,7 +131,7 @@ class ReceiverAppUpdate(ReceiverEntity, _ReleaseUpdate):
         )
         self._attr_installed_version: str | None = None
         self._attr_latest_version: str | None = None
-        self._attr_in_progress = False
+        self._auto_install_running = False
         self._release = {}
 
     async def async_update(self) -> None:
@@ -152,38 +152,43 @@ class ReceiverAppUpdate(ReceiverEntity, _ReleaseUpdate):
 
         if (
             popup_appearance(self.hass)["auto_update_tv_apps"]
-            and not self._attr_in_progress
+            and not self._auto_install_running
             and is_newer(self._attr_latest_version, self._attr_installed_version)
         ):
-            try:
+            # Run it as its own job through Home Assistant's install path, so the
+            # status poll isn't held up and "installing" always clears afterwards.
+            self._auto_install_running = True
+            create_task = getattr(self.hass, "async_create_background_task", None)
+            if callable(create_task):
+                create_task(self._async_auto_install(), f"{DOMAIN} auto update")
+            else:
+                self.hass.async_create_task(self._async_auto_install())
+
+    async def _async_auto_install(self) -> None:
+        try:
+            install = getattr(self, "async_install_with_progress", None)
+            if callable(install):
+                await install(None, False)
+            else:
                 await self.async_install(None, False)
-            except HomeAssistantError as error:
-                _LOGGER.info("Automatic TV app update skipped: %s", error)
+        except HomeAssistantError as error:
+            _LOGGER.info("Automatic TV app update skipped: %s", error)
+        finally:
+            self._auto_install_running = False
 
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
-        """Install the newest app over ADB."""
+        """Install the newest app over ADB. Home Assistant tracks "installing"."""
 
-        self._attr_in_progress = True
-        self._write_state()
         try:
             result = await async_install_app(self.hass, self.host)
         except AdbSetupError as error:
             raise HomeAssistantError(str(error)) from error
-        finally:
-            self._attr_in_progress = False
         self._attr_installed_version = (
             release_version({"tag_name": result.release})
             or self._attr_latest_version
         )
-        self._write_state()
-
-    def _write_state(self) -> None:
-        write = getattr(self, "async_write_ha_state", None)
-        if callable(write) and getattr(self, "hass", None) is not None:
-            write()
-
 
 class IntegrationUpdate(_ReleaseUpdate):
     """This Home Assistant integration: downloads and installs its own files."""
@@ -200,7 +205,6 @@ class IntegrationUpdate(_ReleaseUpdate):
         )
         self._attr_installed_version = integration_version()
         self._attr_latest_version: str | None = None
-        self._attr_in_progress = False
         self._release = {}
 
     async def async_update(self) -> None:
@@ -256,9 +260,6 @@ class IntegrationUpdate(_ReleaseUpdate):
         _LOGGER.info("Installed HA TV PiP Plus integration %s", new_version)
         self._attr_installed_version = new_version
         _raise_restart_issue(self.hass, new_version)
-        write = getattr(self, "async_write_ha_state", None)
-        if callable(write):
-            write()
 
 
 def install_integration_zip(

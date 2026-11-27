@@ -7,6 +7,7 @@ USB debugging in the TV's developer options). The first connection shows an
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import secrets
@@ -25,7 +26,6 @@ RELEASE_REPOSITORY = "dlehmer/ha-tv-pip"
 RELEASES_API = f"https://api.github.com/repos/{RELEASE_REPOSITORY}/releases/latest"
 DEVICE_APK_PATH = "/data/local/tmp/ha-tv-pip-plus.apk"
 ADB_KEY_FILENAME = f"{DOMAIN}_adbkey"
-APK_CACHE_FILENAME = f"{DOMAIN}_app.apk"
 AUTH_TIMEOUT_S = 45.0
 CONNECT_TIMEOUT_S = 9.0
 
@@ -95,12 +95,41 @@ async def async_grant_overlay_permission(hass: Any, host: str) -> None:
         await _async_close(device)
 
 
-async def async_install_app(hass: Any, host: str) -> InstallResult:
-    """Download the latest app release, install it, grant overlay, and launch it."""
+DATA_INSTALL_LOCK = "install_lock"
 
+
+def _install_lock(hass: Any) -> asyncio.Lock:
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    lock = domain_data.get(DATA_INSTALL_LOCK)
+    if not isinstance(lock, asyncio.Lock):
+        lock = asyncio.Lock()
+        domain_data[DATA_INSTALL_LOCK] = lock
+    return lock
+
+
+async def async_install_app(hass: Any, host: str) -> InstallResult:
+    """Download the latest app release, install it, grant overlay, and launch it.
+
+    One TV at a time: the download is shared and ADB pushes are slow.
+    """
+
+    async with _install_lock(hass):
+        try:
+            return await _async_install_app(hass, host)
+        except AdbSetupError as error:
+            _LOGGER.warning("Installing the TV app on %s failed: %s", host, error)
+            raise
+
+
+async def _async_install_app(hass: Any, host: str) -> InstallResult:
     apk_url, apk_name, release = await _async_latest_apk(hass)
-    apk_path = hass.config.path(".storage", APK_CACHE_FILENAME)
-    await _async_download(hass, apk_url, apk_path)
+    # One file per release, downloaded once and reused for every TV.
+    safe_name = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in apk_name)
+    apk_path = hass.config.path(".storage", f"{DOMAIN}_{safe_name}")
+    if not await hass.async_add_executor_job(os.path.isfile, apk_path):
+        partial = f"{apk_path}.part"
+        await _async_download(hass, apk_url, partial)
+        await hass.async_add_executor_job(os.replace, partial, apk_path)
 
     device = await _async_connect(hass, host)
     try:

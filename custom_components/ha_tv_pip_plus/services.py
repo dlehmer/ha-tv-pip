@@ -3070,7 +3070,11 @@ def _entries_for_devices(
             device = device_registry.async_get(device_id)
             if device is None:
                 continue
-            matched_entry_ids.update(device.config_entries)
+            entry_id = getattr(device, "config_entry_id", None)
+            if entry_id:
+                matched_entry_ids.add(entry_id)
+            else:  # Home Assistant before devices had a single config entry
+                matched_entry_ids.update(getattr(device, "config_entries", ()))
     except ModuleNotFoundError:
         _LOGGER.debug("Home Assistant device registry is unavailable")
 
