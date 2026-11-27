@@ -107,7 +107,7 @@ def test_wake_modes() -> None:
 
 def test_update_option_writes_entry_options() -> None:
     updates: list[dict[str, Any]] = []
-    entry = types.SimpleNamespace(options={"x": 1})
+    entry = types.SimpleNamespace(options={"x": 1}, entry_id="e")
     hass = types.SimpleNamespace(
         config_entries=types.SimpleNamespace(
             async_update_entry=lambda entry, options: updates.append(options)

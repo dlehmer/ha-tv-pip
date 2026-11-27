@@ -9,7 +9,11 @@ from __future__ import annotations
 from typing import Any
 
 from .entity import ReceiverEntity
-from .schedule import async_update_schedule_option, schedule_options
+from .schedule import (
+    async_update_schedule_option,
+    options_changed_signal,
+    schedule_options,
+)
 
 
 class ReceiverScheduleEntity(ReceiverEntity):
@@ -33,17 +37,23 @@ class ReceiverScheduleEntity(ReceiverEntity):
         parent = getattr(super(), "async_added_to_hass", None)
         if callable(parent):
             await parent()
-        add_listener = getattr(self.entry, "add_update_listener", None)
-        on_remove = getattr(self, "async_on_remove", None)
-        if callable(add_listener) and callable(on_remove):
-            on_remove(add_listener(self._async_options_changed))
+        try:
+            from homeassistant.helpers.dispatcher import (  # type: ignore[import-not-found]
+                async_dispatcher_connect,
+            )
+        except (ImportError, ModuleNotFoundError):
+            return
+        self._remove_with_entity(
+            async_dispatcher_connect(
+                self.hass,
+                options_changed_signal(self.entry.entry_id),
+                self._async_options_changed,
+            )
+        )
 
-    async def _async_options_changed(self, hass: Any, entry: Any) -> None:
-        self.entry = entry
+    async def _async_options_changed(self) -> None:
         self._settings_changed()
-        write_state = getattr(self, "async_write_ha_state", None)
-        if callable(write_state):
-            write_state()
+        self._write_state()
 
     def _settings_changed(self) -> None:
         """Hook for subclasses that cache something derived from the options."""

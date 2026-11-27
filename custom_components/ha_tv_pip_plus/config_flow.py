@@ -86,6 +86,7 @@ from .schedule import (
     WAKE_ALWAYS,
     WAKE_MODES,
     WAKE_NEVER,
+    async_notify_options_changed,
     schedule_options,
 )
 from .stills import (
@@ -479,6 +480,7 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
                         await async_save_appearance(hass, values[SECTION_APPEARANCE])
                     if values.get(CONF_SEND_TEST):
                         _schedule_test_popup(hass, entry)
+                    _schedule_options_notice(hass, entry)
                 return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
@@ -777,6 +779,18 @@ def _remote_setup_changed(entry: Any, options: dict[str, Any]) -> bool:
 
 def _appearance_changed(hass: Any, submitted: dict[str, Any]) -> bool:
     return bool(normalize_appearance(submitted) != popup_appearance(hass))
+
+
+def _schedule_options_notice(hass: Any, entry: Any) -> None:
+    """Refresh the TV's settings entities once the saved options are in place."""
+
+    async def _notify() -> None:
+        await asyncio.sleep(0.5)
+        async_notify_options_changed(hass, entry.entry_id)
+
+    create_task = getattr(hass, "async_create_task", None)
+    if callable(create_task):
+        create_task(_notify())
 
 
 def _schedule_test_popup(hass: Any, entry: Any) -> None:

@@ -1,0 +1,2 @@
+- Do not disturb sensor updates safely when its control entity changes 🛠️
+- Settings entities ready for Home Assistant 2026.12 ✅

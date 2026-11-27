@@ -190,6 +190,24 @@ def may_wake_tv(options: Any, now: datetime | None = None) -> bool:
     )
 
 
+def options_changed_signal(entry_id: str) -> str:
+    """Dispatcher signal sent when a TV's options change."""
+
+    return f"ha_tv_pip_plus_options_changed_{entry_id}"
+
+
+def async_notify_options_changed(hass: Any, entry_id: str) -> None:
+    """Tell this TV's settings entities to show the current options."""
+
+    try:
+        from homeassistant.helpers.dispatcher import (  # type: ignore[import-not-found]
+            async_dispatcher_send,
+        )
+    except (ImportError, ModuleNotFoundError):
+        return
+    async_dispatcher_send(hass, options_changed_signal(entry_id))
+
+
 async def async_update_schedule_option(
     hass: Any, entry: Any, key: str, value: Any
 ) -> None:
@@ -198,3 +216,4 @@ async def async_update_schedule_option(
     options = dict(entry.options)
     options[key] = value
     hass.config_entries.async_update_entry(entry, options=options)
+    async_notify_options_changed(hass, entry.entry_id)

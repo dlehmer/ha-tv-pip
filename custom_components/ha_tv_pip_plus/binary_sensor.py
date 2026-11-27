@@ -127,7 +127,9 @@ class ReceiverDoNotDisturbActiveBinarySensor(
         except ModuleNotFoundError:
             return
 
-        def _changed(_event: Any) -> None:
+        # A coroutine runs on the event loop; a plain function would be run in
+        # a worker thread, where writing state isn't allowed.
+        async def _changed(_event: Any) -> None:
             self._write_state()
 
         self._unsub_control = async_track_state_change_event(

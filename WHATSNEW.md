@@ -1,5 +1,10 @@
 # What's New ✨
 
+## 1.37.4 - Stability Fixes 🔧
+
+- Do not disturb sensor updates safely when its control entity changes 🛠️
+- Settings entities ready for Home Assistant 2026.12 ✅
+
 ## 1.37.3 - Pause, Mute or Keep Playing per TV 🔇
 
 - Each TV can pause, mute, lower the volume or keep playing during popups 🔇
