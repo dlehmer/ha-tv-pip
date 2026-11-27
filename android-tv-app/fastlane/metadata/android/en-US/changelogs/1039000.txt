@@ -1,0 +1,3 @@
+- TVs that only offer Wireless debugging (like newer Google TVs) can now be set up from Home Assistant 📶
+- On Home Assistant OS, setup offers to install a small ADB server helper app for you, then asks for the TV's pairing code 🔐
+- Install or update TV app and Grant overlay permission work on these TVs too 🛠️

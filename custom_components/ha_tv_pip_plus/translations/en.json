@@ -12,7 +12,7 @@
       "invalid_port": "Enter a valid port between 1 and 65535.",
       "pairing_not_started": "Start pairing again and enter the new code shown on the TV.",
       "adb_missing_library": "The adb-shell library is not installed. Restart Home Assistant and try again.",
-      "adb_not_reachable": "Could not reach the TV over ADB on port 5555. On the TV, turn on USB debugging (or Network debugging) in Settings > System > Developer options, then try again.",
+      "adb_not_reachable": "Could not reach the TV over ADB on port 5555. On the TV, turn on USB debugging (or Network debugging) in Settings > System > Developer options, then try again. If your TV only has Wireless debugging, Home Assistant OS is needed to set it up from here.",
       "adb_auth_timeout": "The TV did not answer the 'Allow debugging?' prompt in time. Accept it on the TV (tick 'Always allow'), then try again.",
       "adb_auth_rejected": "The TV rejected Home Assistant's debugging request. Try again and choose Allow on the TV.",
       "adb_download_failed": "Could not download the TV app from GitHub Releases. Check Home Assistant's internet connection.",
@@ -22,7 +22,16 @@
       "adb_grant_failed": "The app installed, but the TV did not accept the overlay permission.",
       "adb_adb_failed": "An ADB command failed. Check Home Assistant's logs for details.",
       "adb_pairing_rejected": "The TV app did not accept automatic pairing.",
-      "power_entity_required": "Pick the TV's power entity, or choose Never. Pair the TV's Android TV Remote first if it isn't in the list."
+      "power_entity_required": "Pick the TV's power entity, or choose Never. Pair the TV's Android TV Remote first if it isn't in the list.",
+      "adb_server_unsupported": "Wireless debugging needs Home Assistant OS (or Supervised) so Home Assistant can run its ADB server app.",
+      "adb_server_missing": "The HA TV PiP Plus ADB server app is not installed.",
+      "adb_server_install_failed": "Could not install the HA TV PiP Plus ADB server app. Check the Supervisor logs, then try again.",
+      "adb_server_start_failed": "The HA TV PiP Plus ADB server app did not start. Check its log under Settings > Apps, then try again.",
+      "adb_server_unreachable": "Could not reach the HA TV PiP Plus ADB server app. Check that it's running under Settings > Apps.",
+      "adb_wireless_pairing_port": "Could not find the TV's pairing port. Keep the pairing code on the TV's screen and enter the port shown next to its IP address.",
+      "adb_wireless_pair_failed": "The TV did not accept the pairing code. Codes only work while they're on screen: open a new one on the TV and try again.",
+      "adb_wireless_off": "Could not find the TV over Wireless debugging. Check that Wireless debugging is still on, or enter the port from the Wireless debugging screen (next to the IP address).",
+      "adb_wireless_not_paired": "The TV didn't accept the connection. Open a new pairing code on the TV and try again."
     },
     "step": {
       "confirm": {
@@ -43,9 +52,9 @@
         "data": {
           "host": "Receiver host",
           "port": "Receiver port",
-          "install_app": "Install the HA TV PiP Plus app on this TV first (needs USB debugging on)"
+          "install_app": "Install the HA TV PiP Plus app on this TV first (needs USB debugging or Wireless debugging on)"
         },
-        "description": "Add a TV by its IP address.\n\n**Find the TV's IP address:** on the TV, open Settings > Network & Internet, select the Wi-Fi network (or Ethernet) you're connected to, and look for IP address (it looks like 192.168.1.50). On some TVs it's under Settings > System > About > Status. If you can, reserve that address for the TV in your router so it doesn't change.\n\n**Turn on developer options (needed to install the app from here):**\n1. On the TV, open Settings > System > About (on some TVs: Settings > Device Preferences > About).\n2. Select Android TV OS build (or Build) 7 times, until it says you're a developer.\n3. Go back to Settings > System > Developer options and turn on USB debugging (on some TVs it's called Network debugging or ADB debugging).\n\nThen tick \"Install the HA TV PiP Plus app on this TV first\" and Home Assistant installs, sets up and pairs the app for you. If the app is already on the TV, leave it unticked and type the code the TV shows.",
+        "description": "Add a TV by its IP address.\n\n**Find the TV's IP address:** on the TV, open Settings > Network & Internet, select the Wi-Fi network (or Ethernet) you're connected to, and look for IP address (it looks like 192.168.1.50). On some TVs it's under Settings > System > About > Status. If you can, reserve that address for the TV in your router so it doesn't change.\n\n**Turn on developer options (needed to install the app from here):**\n1. On the TV, open Settings > System > About (on some TVs: Settings > Device Preferences > About).\n2. Select Android TV OS build (or Build) 7 times, until it says you're a developer.\n3. Go back to Settings > System > Developer options and turn on USB debugging (on some TVs it's called Network debugging or ADB debugging). Newer Google TVs may only offer Wireless debugging; that works too, and Home Assistant walks you through it.\n\nThen tick \"Install the HA TV PiP Plus app on this TV first\" and Home Assistant installs, sets up and pairs the app for you. If the app is already on the TV, leave it unticked and type the code the TV shows.",
         "title": "Add HA TV PiP Plus receiver"
       },
       "install_app": {
@@ -63,7 +72,23 @@
           "wake_tv": "Choose Never if you don't want this, or want to set it up later.",
           "power_entity": "The remote or media player from the Android TV Remote integration for this TV."
         }
+      },
+      "adb_server": {
+        "title": "This TV needs Wireless debugging",
+        "description": "Home Assistant couldn't reach {host} with USB debugging. Newer Google TVs only allow **Wireless debugging**, which needs a pairing code.\n\nTo use it, Home Assistant installs a small helper app, **HA TV PiP Plus ADB server**, and adds this project's app repository to your app store. It runs only inside Home Assistant and publishes no ports on your network.\n\nClick Submit to install it. This takes a minute or two."
+      },
+      "wireless_pair": {
+        "title": "Pair with Wireless debugging",
+        "description": "On {host}:\n1. Open Settings > System > Developer options and turn on **Wireless debugging**.\n2. Select **Wireless debugging**, then **Pair device with pairing code**.\n3. Type the six-digit code below while it's still on the TV's screen.\n\nHome Assistant finds the ports on its own. If it can't, fill them in from the TV: the pairing port is next to the IP address under the code, and the connection port is next to the IP address on the Wireless debugging screen.\n\nAfter pairing, Home Assistant installs the app and sets it up. That takes up to a minute.",
+        "data": {
+          "wireless_code": "Pairing code",
+          "pairing_port": "Pairing port (optional)",
+          "connect_port": "Connection port (optional)"
+        }
       }
+    },
+    "progress": {
+      "install_adb_server": "Installing and starting the HA TV PiP Plus ADB server app. This can take a minute or two."
     }
   },
   "options": {

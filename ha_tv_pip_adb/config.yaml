@@ -1,0 +1,13 @@
+name: HA TV PiP Plus ADB server
+version: "1.0.0"
+slug: ha_tv_pip_adb
+description: >-
+  Lets HA TV PiP Plus install and set up its TV app on TVs that only offer
+  Wireless debugging. Installed for you by the integration when needed.
+url: https://github.com/dlehmer/ha-tv-pip
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: services
+boot: auto
