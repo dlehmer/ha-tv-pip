@@ -10,6 +10,8 @@ from .entity import ReceiverEntity
 from .remote import remote_registry
 from .repairs import async_update_overlay_permission_issue
 from .restreaming import restreaming_provider_metadata
+from .schedule import CONF_DND_ENTITY, dnd_reason, may_wake_tv
+from .schedule_entity import ReceiverScheduleEntity
 from .services import (
     CAMERA_COMPATIBILITY_KEY,
     _async_get_receiver_status_command,
@@ -52,8 +54,85 @@ async def async_setup_entry(hass: Any, entry: Any, async_add_entities: Any) -> N
             ReceiverRemoteConnectedBinarySensor(entry, hass=hass),
             ReceiverOverlayPermissionBinarySensor(entry, hass=hass),
             ReceiverCameraRestreamingRecommendedBinarySensor(hass, entry),
+            ReceiverDoNotDisturbActiveBinarySensor(hass, entry),
         ]
     )
+
+
+class ReceiverDoNotDisturbActiveBinarySensor(
+    ReceiverScheduleEntity, BinarySensorEntity
+):
+    """On while popups to this TV are being held back by do not disturb."""
+
+    def __init__(self, hass: Any, entry: Any) -> None:
+        super().__init__(
+            hass,
+            entry,
+            key="do_not_disturb_active",
+            name="Do not disturb active",
+            icon="mdi:bell-off-outline",
+        )
+        self._unsub_control: Any = None
+
+    @property
+    def is_on(self) -> bool:
+        return dnd_reason(self.entry.options, hass=self.hass) is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "reason": dnd_reason(self.entry.options, hass=self.hass),
+            "control_entity": self.settings[CONF_DND_ENTITY] or None,
+            "may_turn_tv_on_now": may_wake_tv(self.entry.options),
+        }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        try:
+            from datetime import timedelta
+
+            from homeassistant.helpers.event import (  # type: ignore[import-not-found]
+                async_track_time_interval,
+            )
+        except ModuleNotFoundError:
+            return
+        self._on_remove(
+            async_track_time_interval(
+                self.hass, self._async_tick, timedelta(minutes=1)
+            )
+        )
+        self._track_control_entity()
+        self._on_remove(self._untrack_control_entity)
+
+    async def _async_tick(self, _now: Any) -> None:
+        self._write_state()
+
+    def _settings_changed(self) -> None:
+        self._track_control_entity()
+
+    def _untrack_control_entity(self) -> None:
+        if self._unsub_control is not None:
+            self._unsub_control()
+            self._unsub_control = None
+
+    def _track_control_entity(self) -> None:
+        self._untrack_control_entity()
+        entity_id = self.settings[CONF_DND_ENTITY]
+        if not entity_id or self.hass is None:
+            return
+        try:
+            from homeassistant.helpers.event import (  # type: ignore[import-not-found,unused-ignore]
+                async_track_state_change_event,
+            )
+        except ModuleNotFoundError:
+            return
+
+        def _changed(_event: Any) -> None:
+            self._write_state()
+
+        self._unsub_control = async_track_state_change_event(
+            self.hass, [entity_id], _changed
+        )
 
 
 class ReceiverPollingBinarySensor(ReceiverEntity, BinarySensorEntity):

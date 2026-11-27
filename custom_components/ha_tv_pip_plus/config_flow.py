@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import replace
 from typing import Any, Protocol
@@ -27,6 +28,7 @@ from .appearance import (
     TEXT_MODES,
     async_save_appearance,
     hex_to_rgb,
+    normalize_appearance,
     popup_appearance,
 )
 from .client import (
@@ -45,8 +47,6 @@ from .const import (
     CONF_DEFAULT_STREAM_TYPE,
     CONF_DEFAULT_WIDTH,
     CONF_DEVICE_ID,
-    CONF_EDIT_CAMERA_BUTTONS,
-    CONF_EDIT_POPUP_APPEARANCE,
     CONF_HOST,
     CONF_INSTALL_APP,
     CONF_NAME,
@@ -56,7 +56,6 @@ from .const import (
     CONF_PREFER_REMOTE_TRANSPORT,
     CONF_REMOTE_ACCESS_TOKEN,
     CONF_REMOTE_HOME_ASSISTANT_URL,
-    CONF_SHOW_ADVANCED_OPTIONS,
     CONF_TOKEN,
     CONF_VERSION,
     DEFAULT_PORT,
@@ -69,6 +68,32 @@ from .discovery import ReceiverDiscovery, parse_discovery_properties
 from .remote_setup import (
     async_sync_remote_setup_values,
     suggested_remote_home_assistant_url,
+)
+from .schedule import (
+    CONF_DND,
+    CONF_DND_END,
+    CONF_DND_ENTITY,
+    CONF_DND_ENTITY_STATE,
+    CONF_DND_SCHEDULE,
+    CONF_DND_START,
+    CONF_WAKE_END,
+    CONF_WAKE_MODE,
+    CONF_WAKE_START,
+    DND_ENTITY_STATES,
+    WAKE_ALWAYS,
+    WAKE_MODES,
+    WAKE_NEVER,
+    schedule_options,
+)
+from .stills import (
+    CONF_STILL_EVENT_IMAGE,
+    CONF_STILL_FISHEYE_CAMERAS,
+    CONF_STILL_FOCUS,
+    CONF_STILL_ZOOM,
+    CONF_WOKEN_TV_VIEW,
+    STILL_FOCUS_AREAS,
+    WOKEN_TV_VIEWS,
+    still_options,
 )
 
 ha_selector: Any | None
@@ -106,6 +131,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
     _discovered_receiver: ReceiverDiscovery | None = None
     _pairing_receiver: ReceiverDiscovery | None = None
     _install_receiver: ReceiverDiscovery | None = None
+    _finished_receiver: ReceiverDiscovery | None = None
+    _finished_token: str | None = None
 
     @staticmethod
     def async_get_options_flow(config_entry: Any) -> Any:
@@ -129,7 +156,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
                     self._install_receiver = receiver
                     return await self.async_step_install_app()
                 if receiver.pairing == "disabled":
-                    return _create_receiver_entry(self, receiver)
+                    return await self._async_finish(receiver)
                 self._pairing_receiver = receiver
                 return await self.async_step_pair()
 
@@ -167,10 +194,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
                 self._install_receiver = None
                 token = await _async_pair_over_adb(self.hass, receiver)
                 if token is not None:
-                    return _create_receiver_entry(
-                        self,
-                        replace(receiver, pairing="paired"),
-                        token=token,
+                    return await self._async_finish(
+                        replace(receiver, pairing="paired"), token=token
                     )
                 # Automatic pairing failed: fall back to the code on the TV.
                 self._pairing_receiver = receiver
@@ -180,6 +205,76 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
             step_id="install_app",
             data_schema=vol.Schema({}),
             description_placeholders={CONF_HOST: receiver.host},
+            errors=errors,
+        )
+
+    async def _async_finish(
+        self, receiver: ReceiverDiscovery, *, token: str | None = None
+    ) -> Any:
+        """Paired: ask how this TV should be turned on, then create the entry."""
+
+        self._finished_receiver = receiver
+        self._finished_token = token
+        return await self.async_step_turn_tv_on()
+
+    async def async_step_turn_tv_on(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Ask whether Home Assistant should turn this TV on for popups.
+
+        Turning a TV on needs an entity that powers it, which the Android TV
+        Remote integration provides. If one is already paired for this TV's
+        address it is suggested; otherwise the form explains how to pair it.
+        """
+
+        receiver = self._finished_receiver
+        if receiver is None:
+            return self.async_abort(reason="invalid_discovery")
+        hass = getattr(self, "hass", None)
+        suggested = android_tv_remote_entity_for_host(hass, receiver.host)
+        errors: dict[str, str] = {}
+        wake_mode = WAKE_ALWAYS if suggested else WAKE_NEVER
+        power_entity = suggested or ""
+
+        if user_input is not None:
+            wake_mode = str(user_input.get(CONF_WAKE_MODE) or WAKE_NEVER)
+            if wake_mode not in WAKE_MODES:
+                wake_mode = WAKE_NEVER
+            power_entity = str(user_input.get(CONF_POWER_ENTITY) or "").strip()
+            if wake_mode != WAKE_NEVER and not power_entity:
+                errors[CONF_POWER_ENTITY] = "power_entity_required"
+            else:
+                options: dict[str, Any] = {CONF_WAKE_MODE: wake_mode}
+                if power_entity:
+                    options[CONF_POWER_ENTITY] = power_entity
+                return _create_receiver_entry(
+                    self, receiver, token=self._finished_token, options=options
+                )
+
+        return self.async_show_form(
+            step_id="turn_tv_on",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_WAKE_MODE, default=wake_mode): _choice_selector(
+                        (WAKE_NEVER, WAKE_ALWAYS), "wake_tv_setup"
+                    ),
+                    _optional_suggested(
+                        CONF_POWER_ENTITY, power_entity
+                    ): _entity_selector(("remote", "media_player")),
+                }
+            ),
+            description_placeholders={
+                CONF_NAME: receiver.name,
+                CONF_HOST: receiver.host,
+                "pair_remote_url": ANDROID_TV_REMOTE_SETUP_URL,
+                "found": (
+                    f"Found {suggested}, the Android TV Remote for this TV. "
+                    "It's already picked below."
+                    if suggested
+                    else "No Android TV Remote was found for this TV yet."
+                ),
+            },
             errors=errors,
         )
 
@@ -227,7 +322,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
                 name=_confirmed_receiver_name(user_input, fallback=receiver.name),
             )
             if confirmed_receiver.pairing == "disabled":
-                return _create_receiver_entry(self, confirmed_receiver)
+                return await self._async_finish(confirmed_receiver)
             self._pairing_receiver = confirmed_receiver
             return await self.async_step_pair()
 
@@ -286,10 +381,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
                     )
                     errors["base"] = str(error)
                 else:
-                    return _create_receiver_entry(
-                        self,
-                        replace(receiver, pairing="paired"),
-                        token=result.token,
+                    return await self._async_finish(
+                        replace(receiver, pairing="paired"), token=result.token
                     )
 
         return self.async_show_form(
@@ -304,8 +397,30 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
         )
 
 
+SECTION_POWER = "turn_tv_on"
+SECTION_DND = "do_not_disturb_settings"
+SECTION_CAMERA_BUTTONS = "camera_buttons"
+SECTION_APPEARANCE = "appearance"
+SECTION_ADVANCED = "advanced"
+CONF_SEND_TEST = "send_test_popup"
+_STILL_KEYS = (
+    CONF_WOKEN_TV_VIEW,
+    CONF_STILL_ZOOM,
+    CONF_STILL_FOCUS,
+    CONF_STILL_FISHEYE_CAMERAS,
+    CONF_STILL_EVENT_IMAGE,
+)
+CLEARABLE_FIELDS = frozenset({CONF_POWER_ENTITY, CONF_DND_ENTITY})
+TEST_AFTER_SAVE_DELAY_S = 2.0
+
+
 class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
-    """Options flow for receiver defaults and remote receiver provisioning."""
+    """One-page options dialog for a TV.
+
+    This TV's own settings (stream defaults, turning the TV on, do not disturb,
+    advanced) sit next to the settings shared by every TV (door buttons, popup
+    look), each group in its own section of the same dialog.
+    """
 
     def __init__(self, config_entry: Any) -> None:
         """Initialize the options flow with a Home Assistant config entry.
@@ -316,8 +431,6 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
         """
 
         self._config_entry = config_entry
-        self._pending_basic_options: dict[str, Any] | None = None
-        self._next_steps: list[str] = []
 
     @property
     def _entry(self) -> Any:
@@ -329,354 +442,470 @@ class ReceiverOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
             return self._config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> Any:
-        """Configure everyday receiver defaults from Home Assistant."""
+        """Show and save the whole options dialog."""
 
-        errors: dict[str, str] = {}
-        entry = self._entry
-        current_stream_type = str(
-            entry.options.get(CONF_DEFAULT_STREAM_TYPE, STREAM_TYPE_AUTO)
-        ).strip()
-        if current_stream_type not in STREAM_TYPES:
-            current_stream_type = STREAM_TYPE_AUTO
-        current_duration = (
-            _optional_default_int(
-                entry.options.get(CONF_DEFAULT_DURATION_SECONDS),
-                minimum=0,
-                maximum=3600,
-            )
-            or 0
-        )
-        current_snapshot_fallback = bool(
-            entry.options.get(CONF_DEFAULT_SNAPSHOT_FALLBACK, True)
-        )
-        current_prefer_remote_transport = bool(
-            entry.options.get(CONF_PREFER_REMOTE_TRANSPORT, False)
-        )
-        current_power_entity = str(entry.options.get(CONF_POWER_ENTITY) or "").strip()
-        show_advanced_options = False
-        edit_camera_buttons = False
-        edit_popup_appearance = False
-
-        if user_input is not None:
-            default_stream_type = str(
-                user_input.get(CONF_DEFAULT_STREAM_TYPE, STREAM_TYPE_AUTO)
-            ).strip()
-            default_duration = _optional_default_int(
-                user_input.get(CONF_DEFAULT_DURATION_SECONDS),
-                minimum=0,
-                maximum=3600,
-            )
-            default_snapshot_fallback = bool(
-                user_input.get(CONF_DEFAULT_SNAPSHOT_FALLBACK, True)
-            )
-            prefer_remote_transport = bool(
-                user_input.get(CONF_PREFER_REMOTE_TRANSPORT, False)
-            )
-            power_entity = str(user_input.get(CONF_POWER_ENTITY) or "").strip()
-            show_advanced_options = bool(
-                user_input.get(CONF_SHOW_ADVANCED_OPTIONS, False)
-            )
-            edit_camera_buttons = bool(
-                user_input.get(CONF_EDIT_CAMERA_BUTTONS, False)
-            )
-            edit_popup_appearance = bool(
-                user_input.get(CONF_EDIT_POPUP_APPEARANCE, False)
-            )
-
-            if default_stream_type not in STREAM_TYPES:
-                errors[CONF_DEFAULT_STREAM_TYPE] = "invalid_default_stream_type"
-            elif default_duration is None:
-                errors[CONF_DEFAULT_DURATION_SECONDS] = "invalid_default_duration"
-            else:
-                basic_options = _basic_options(
-                    default_stream_type=default_stream_type,
-                    default_duration=default_duration,
-                    default_snapshot_fallback=default_snapshot_fallback,
-                    prefer_remote_transport=prefer_remote_transport,
-                    power_entity=power_entity,
-                )
-                if edit_camera_buttons or edit_popup_appearance:
-                    self._pending_basic_options = basic_options
-                    self._next_steps = [
-                        step
-                        for step, wanted in (
-                            ("camera_buttons", edit_camera_buttons),
-                            ("appearance", edit_popup_appearance),
-                            ("advanced", show_advanced_options),
-                        )
-                        if wanted
-                    ]
-                    return await self._async_next_options_step()
-                if show_advanced_options:
-                    self._pending_basic_options = basic_options
-                    return await self.async_step_advanced()
-
-                return self.async_create_entry(
-                    title="",
-                    data=_options_with_preserved_advanced(entry, basic_options),
-                )
-
-            if default_stream_type in STREAM_TYPES:
-                current_stream_type = default_stream_type
-            if default_duration is not None:
-                current_duration = default_duration
-            current_snapshot_fallback = default_snapshot_fallback
-            current_prefer_remote_transport = prefer_remote_transport
-            current_power_entity = power_entity
-
-        power_key = (
-            vol.Optional(
-                CONF_POWER_ENTITY,
-                description={"suggested_value": current_power_entity},
-            )
-            if current_power_entity
-            else vol.Optional(CONF_POWER_ENTITY)
-        )
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_DEFAULT_STREAM_TYPE,
-                        default=current_stream_type,
-                    ): _select_dropdown(STREAM_TYPES),
-                    vol.Optional(
-                        CONF_DEFAULT_DURATION_SECONDS,
-                        default=current_duration,
-                    ): int,
-                    vol.Optional(
-                        CONF_DEFAULT_SNAPSHOT_FALLBACK,
-                        default=current_snapshot_fallback,
-                    ): bool,
-                    vol.Optional(
-                        CONF_PREFER_REMOTE_TRANSPORT,
-                        default=current_prefer_remote_transport,
-                    ): bool,
-                    power_key: _entity_selector(("media_player", "remote")),
-                    vol.Optional(
-                        CONF_EDIT_CAMERA_BUTTONS,
-                        default=edit_camera_buttons,
-                    ): bool,
-                    vol.Optional(
-                        CONF_EDIT_POPUP_APPEARANCE,
-                        default=edit_popup_appearance,
-                    ): bool,
-                    vol.Optional(
-                        CONF_SHOW_ADVANCED_OPTIONS,
-                        default=show_advanced_options,
-                    ): bool,
-                }
-            ),
-            errors=errors,
-        )
-
-    async def _async_next_options_step(self) -> Any:
-        """Run the next settings page the user ticked, or save and finish."""
-
-        if self._next_steps:
-            step = self._next_steps.pop(0)
-            return await getattr(self, f"async_step_{step}")()
-        basic = self._pending_basic_options or _current_basic_options(self._entry)
-        self._pending_basic_options = None
-        return self.async_create_entry(
-            title="",
-            data=_options_with_preserved_advanced(self._entry, basic),
-        )
-
-    async def async_step_appearance(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> Any:
-        """Popup look shared by every receiver: text, colors, and size."""
-
-        hass = getattr(self, "hass", None)
-        if user_input is not None:
-            await async_save_appearance(hass, user_input)
-            return await self._async_next_options_step()
-
-        return self.async_show_form(
-            step_id="appearance",
-            data_schema=vol.Schema(appearance_form_fields(popup_appearance(hass))),
-        )
-
-    async def async_step_camera_buttons(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> Any:
-        """Pair cameras with the lock, door, or script their popup button runs.
-
-        Pairings are shared by every receiver, so they only need setting once.
-        """
-
-        hass = getattr(self, "hass", None)
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            pairings, error = camera_buttons_from_form(user_input)
-            if error:
-                errors["base"] = error
-            else:
-                await async_save_camera_buttons(hass, pairings)
-                return await self._async_next_options_step()
-            current = camera_buttons_form_values(user_input)
-        else:
-            current = camera_buttons_form_values(
-                camera_buttons_to_form(camera_buttons(hass) if hass else {})
-            )
-
-        fields: dict[Any, Any] = {}
-        for slot in range(1, MAX_CAMERA_BUTTONS + 1):
-            for key, selector in (
-                (f"camera_{slot}", _entity_selector(("camera",))),
-                (f"button_target_{slot}", _entity_selector(BUTTON_TARGET_DOMAINS)),
-                (f"button_label_{slot}", str),
-            ):
-                value = current.get(key)
-                if value:
-                    fields[
-                        vol.Optional(key, description={"suggested_value": value})
-                    ] = selector
-                else:
-                    fields[vol.Optional(key)] = selector
-
-        return self.async_show_form(
-            step_id="camera_buttons",
-            data_schema=vol.Schema(fields),
-            errors=errors,
-        )
-
-    async def async_step_advanced(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> Any:
-        """Configure advanced receiver defaults and remote receiver provisioning."""
-
-        errors: dict[str, str] = {}
         entry = self._entry
         hass = getattr(self, "hass", None)
-        suggested_url = suggested_remote_home_assistant_url(hass)
-        current_url = str(
-            entry.options.get(
-                CONF_REMOTE_HOME_ASSISTANT_URL,
-                suggested_url,
-            )
-        ).strip()
-        current_token = str(
-            entry.options.get(CONF_REMOTE_ACCESS_TOKEN, "")
-        ).strip()
-        current_position = str(
-            entry.options.get(CONF_DEFAULT_POSITION, "top_right")
-        ).strip()
-        if current_position not in NOTIFICATION_POSITIONS:
-            current_position = "top_right"
-        current_width = (
-            _optional_default_int(
-                entry.options.get(CONF_DEFAULT_WIDTH),
-                minimum=0,
-                maximum=1600,
-            )
-            or 0
-        )
-        current_height = (
-            _optional_default_int(
-                entry.options.get(CONF_DEFAULT_HEIGHT),
-                minimum=0,
-                maximum=900,
-            )
-            or 0
-        )
+        errors: dict[str, str] = {}
+        values = _current_option_values(entry, hass)
 
         if user_input is not None:
-            raw_remote_url = str(
-                user_input.get(CONF_REMOTE_HOME_ASSISTANT_URL, "")
-            ).strip()
-            remote_token = str(user_input.get(CONF_REMOTE_ACCESS_TOKEN, "")).strip()
-            remote_url = (raw_remote_url or suggested_url) if remote_token else ""
-            default_position = str(
-                user_input.get(CONF_DEFAULT_POSITION, "top_right")
-            ).strip()
-            default_width = _optional_default_int(
-                user_input.get(CONF_DEFAULT_WIDTH),
-                minimum=0,
-                maximum=1600,
-            )
-            default_height = _optional_default_int(
-                user_input.get(CONF_DEFAULT_HEIGHT),
-                minimum=0,
-                maximum=900,
-            )
-
-            if bool(remote_url) != bool(remote_token):
-                errors["base"] = "remote_fields_required"
-            elif default_position not in NOTIFICATION_POSITIONS:
-                errors[CONF_DEFAULT_POSITION] = "invalid_default_position"
-            elif default_width is None:
-                errors[CONF_DEFAULT_WIDTH] = "invalid_default_overlay_size"
-            elif default_height is None:
-                errors[CONF_DEFAULT_HEIGHT] = "invalid_default_overlay_size"
-            else:
-                options = _options_with_advanced(
-                    entry,
-                    self._pending_basic_options or _current_basic_options(entry),
-                    default_position=default_position,
-                    default_width=default_width,
-                    default_height=default_height,
-                    remote_url=remote_url,
-                    remote_token=remote_token,
+            values = _merge_option_values(values, user_input)
+            options, error_field, error = _options_from_values(entry, hass, values)
+            pairings: dict[str, dict[str, str]] = {}
+            if error is None:
+                pairings, error = camera_buttons_from_form(
+                    values[SECTION_CAMERA_BUTTONS]
                 )
+                error_field = "base"
+            if error is None and _remote_setup_changed(entry, options):
                 if not await async_sync_remote_setup_values(
                     hass,
                     entry,
-                    remote_url,
-                    remote_token,
+                    str(options.get(CONF_REMOTE_HOME_ASSISTANT_URL, "")),
+                    str(options.get(CONF_REMOTE_ACCESS_TOKEN, "")),
                 ):
-                    errors["base"] = "cannot_connect"
-                    current_url = raw_remote_url or suggested_url
-                    current_token = remote_token
-                else:
-                    self._pending_basic_options = None
-                    return self.async_create_entry(title="", data=options)
-
-            current_url = raw_remote_url or suggested_url
-            current_token = remote_token
-            if default_position in NOTIFICATION_POSITIONS:
-                current_position = default_position
-            if default_width is not None:
-                current_width = default_width
-            if default_height is not None:
-                current_height = default_height
+                    error_field, error = "base", "cannot_connect"
+            if error is not None:
+                errors[error_field or "base"] = error
+            else:
+                if hass is not None:
+                    if pairings != (camera_buttons(hass) or {}):
+                        await async_save_camera_buttons(hass, pairings)
+                    if _appearance_changed(hass, values[SECTION_APPEARANCE]):
+                        await async_save_appearance(hass, values[SECTION_APPEARANCE])
+                    if values.get(CONF_SEND_TEST):
+                        _schedule_test_popup(hass, entry)
+                return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
-            step_id="advanced",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_DEFAULT_POSITION,
-                        default=current_position,
-                    ): _select_dropdown(NOTIFICATION_POSITIONS),
-                    vol.Optional(
-                        CONF_DEFAULT_WIDTH,
-                        default=current_width,
-                    ): int,
-                    vol.Optional(
-                        CONF_DEFAULT_HEIGHT,
-                        default=current_height,
-                    ): int,
-                    vol.Optional(
-                        CONF_REMOTE_HOME_ASSISTANT_URL,
-                        default=current_url,
-                    ): str,
-                    vol.Optional(
-                        CONF_REMOTE_ACCESS_TOKEN,
-                        default=current_token,
-                    ): str,
-                }
-            ),
+            step_id="init",
+            data_schema=vol.Schema(_options_schema(values)),
             description_placeholders={
-                "suggested_url": suggested_url or "not configured"
+                "suggested_url": suggested_remote_home_assistant_url(hass)
+                or "not configured"
             },
             errors=errors,
         )
+
+
+ANDROID_TV_REMOTE_DOMAIN = "androidtv_remote"
+ANDROID_TV_REMOTE_SETUP_URL = (
+    "https://my.home-assistant.io/redirect/config_flow_start/"
+    "?domain=androidtv_remote"
+)
+
+
+def android_tv_remote_entity_for_host(hass: Any | None, host: str) -> str | None:
+    """The Android TV Remote entity already paired with the TV at `host`, if any."""
+
+    entries_for = getattr(getattr(hass, "config_entries", None), "async_entries", None)
+    if not callable(entries_for) or not host:
+        return None
+    entry_ids = [
+        entry.entry_id
+        for entry in entries_for(ANDROID_TV_REMOTE_DOMAIN)
+        if str((entry.data or {}).get("host", "")).strip() == host
+    ]
+    if not entry_ids:
+        return None
+    try:
+        from homeassistant.helpers import (  # type: ignore[import-not-found]
+            entity_registry as er,
+        )
+    except (ImportError, ModuleNotFoundError):
+        return None
+    registry = er.async_get(hass)
+    found: dict[str, str] = {}
+    for entry_id in entry_ids:
+        for entity in er.async_entries_for_config_entry(registry, entry_id):
+            if entity.disabled_by is None:
+                found.setdefault(entity.domain, entity.entity_id)
+    return found.get("remote") or found.get("media_player")
+
+
+def _section(fields: dict[Any, Any], *, collapsed: bool) -> Any:
+    """Group fields into a (collapsible) section of the options dialog."""
+
+    try:
+        from homeassistant.data_entry_flow import (  # type: ignore[import-not-found]
+            section,
+        )
+    except (ImportError, ModuleNotFoundError):
+        return fields
+    return section(vol.Schema(fields), {"collapsed": collapsed})
+
+
+def _optional_suggested(key: str, value: Any) -> Any:
+    """Optional field prefilled with `value` but still clearable."""
+
+    if value:
+        return vol.Optional(key, description={"suggested_value": value})
+    return vol.Optional(key)
+
+
+def _time_selector() -> Any:
+    if ha_selector is None:
+        return str
+    return ha_selector.TimeSelector()
+
+
+def _camera_list_selector() -> Any:
+    if ha_selector is None:
+        return list
+    return ha_selector.EntitySelector(
+        ha_selector.EntitySelectorConfig(domain=["camera"], multiple=True)
+    )
+
+
+def _zoom_selector() -> Any:
+    if ha_selector is None:
+        return float
+    return ha_selector.NumberSelector(
+        ha_selector.NumberSelectorConfig(
+            min=1,
+            max=4,
+            step=0.5,
+            unit_of_measurement="×",
+            mode=ha_selector.NumberSelectorMode.SLIDER,
+        )
+    )
+
+
+def _any_entity_selector() -> Any:
+    if ha_selector is None:
+        return str
+    return ha_selector.EntitySelector(ha_selector.EntitySelectorConfig())
+
+
+def _choice_selector(options: tuple[str, ...], translation_key: str) -> Any:
+    if ha_selector is None:
+        return vol.Any(*options)
+    return ha_selector.SelectSelector(
+        ha_selector.SelectSelectorConfig(
+            options=list(options),
+            mode=ha_selector.SelectSelectorMode.DROPDOWN,
+            translation_key=translation_key,
+        )
+    )
+
+
+def _current_option_values(entry: Any, hass: Any | None) -> dict[str, Any]:
+    """Everything the options dialog shows, read from the entry and shared stores."""
+
+    basic = _current_basic_options(entry)
+    schedule = schedule_options(entry.options)
+    position = str(entry.options.get(CONF_DEFAULT_POSITION, "top_right")).strip()
+    if position not in NOTIFICATION_POSITIONS:
+        position = "top_right"
+    suggested_url = suggested_remote_home_assistant_url(hass)
+    return {
+        CONF_DEFAULT_STREAM_TYPE: basic[CONF_DEFAULT_STREAM_TYPE],
+        CONF_DEFAULT_DURATION_SECONDS: basic.get(CONF_DEFAULT_DURATION_SECONDS, 0),
+        CONF_DEFAULT_SNAPSHOT_FALLBACK: basic[CONF_DEFAULT_SNAPSHOT_FALLBACK],
+        CONF_PREFER_REMOTE_TRANSPORT: basic[CONF_PREFER_REMOTE_TRANSPORT],
+        SECTION_POWER: {
+            CONF_POWER_ENTITY: basic.get(CONF_POWER_ENTITY, ""),
+            CONF_WAKE_MODE: schedule[CONF_WAKE_MODE],
+            CONF_WAKE_START: schedule[CONF_WAKE_START],
+            CONF_WAKE_END: schedule[CONF_WAKE_END],
+            **still_options(entry.options),
+        },
+        SECTION_DND: {
+            CONF_DND: schedule[CONF_DND],
+            CONF_DND_ENTITY: schedule[CONF_DND_ENTITY],
+            CONF_DND_ENTITY_STATE: schedule[CONF_DND_ENTITY_STATE],
+            CONF_DND_SCHEDULE: schedule[CONF_DND_SCHEDULE],
+            CONF_DND_START: schedule[CONF_DND_START],
+            CONF_DND_END: schedule[CONF_DND_END],
+        },
+        SECTION_CAMERA_BUTTONS: camera_buttons_form_values(
+            camera_buttons_to_form(camera_buttons(hass) if hass else {})
+        ),
+        SECTION_APPEARANCE: popup_appearance(hass),
+        SECTION_ADVANCED: {
+            CONF_DEFAULT_POSITION: position,
+            CONF_DEFAULT_WIDTH: _optional_default_int(
+                entry.options.get(CONF_DEFAULT_WIDTH), minimum=0, maximum=1600
+            )
+            or 0,
+            CONF_DEFAULT_HEIGHT: _optional_default_int(
+                entry.options.get(CONF_DEFAULT_HEIGHT), minimum=0, maximum=900
+            )
+            or 0,
+            CONF_REMOTE_HOME_ASSISTANT_URL: str(
+                entry.options.get(CONF_REMOTE_HOME_ASSISTANT_URL) or suggested_url
+            ).strip(),
+            CONF_REMOTE_ACCESS_TOKEN: str(
+                entry.options.get(CONF_REMOTE_ACCESS_TOKEN, "")
+            ).strip(),
+        },
+        CONF_SEND_TEST: False,
+    }
+
+
+def _merge_option_values(
+    current: dict[str, Any], user_input: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply submitted values over the current ones.
+
+    Home Assistant leaves a cleared optional field out of the submitted data, so
+    in a submitted section the clearable fields (entity pickers, door buttons)
+    are taken only from what was sent. Section
+    fields sent flat (older frontends, tests) are put back into their section.
+    """
+
+    merged = {
+        key: dict(value) if isinstance(value, dict) else value
+        for key, value in current.items()
+    }
+    sections = (
+        SECTION_POWER,
+        SECTION_DND,
+        SECTION_CAMERA_BUTTONS,
+        SECTION_APPEARANCE,
+        SECTION_ADVANCED,
+    )
+    for key, value in user_input.items():
+        if key in sections and isinstance(value, dict):
+            if key == SECTION_CAMERA_BUTTONS:
+                merged[key] = dict(value)
+            else:
+                kept = {
+                    name: old
+                    for name, old in merged[key].items()
+                    if name not in CLEARABLE_FIELDS
+                }
+                merged[key] = {**kept, **value}
+            continue
+        for section_key in sections:
+            if section_key != SECTION_CAMERA_BUTTONS and key in merged[section_key]:
+                merged[section_key][key] = value
+                break
+        else:
+            merged[key] = value
+    return merged
+
+
+def _options_from_values(
+    entry: Any, hass: Any | None, values: dict[str, Any]
+) -> tuple[dict[str, Any], str | None, str | None]:
+    """Turn dialog values into this TV's options, or (…, field, error key)."""
+
+    stream_type = str(values.get(CONF_DEFAULT_STREAM_TYPE, STREAM_TYPE_AUTO)).strip()
+    if stream_type not in STREAM_TYPES:
+        return {}, CONF_DEFAULT_STREAM_TYPE, "invalid_default_stream_type"
+    duration = _optional_default_int(
+        values.get(CONF_DEFAULT_DURATION_SECONDS), minimum=0, maximum=3600
+    )
+    if duration is None:
+        return {}, CONF_DEFAULT_DURATION_SECONDS, "invalid_default_duration"
+
+    power = values[SECTION_POWER]
+    dnd = values[SECTION_DND]
+    advanced = values[SECTION_ADVANCED]
+
+    position = str(advanced.get(CONF_DEFAULT_POSITION) or "top_right").strip()
+    if position not in NOTIFICATION_POSITIONS:
+        return {}, CONF_DEFAULT_POSITION, "invalid_default_position"
+    width = _optional_default_int(
+        advanced.get(CONF_DEFAULT_WIDTH), minimum=0, maximum=1600
+    )
+    height = _optional_default_int(
+        advanced.get(CONF_DEFAULT_HEIGHT), minimum=0, maximum=900
+    )
+    if width is None:
+        return {}, CONF_DEFAULT_WIDTH, "invalid_default_overlay_size"
+    if height is None:
+        return {}, CONF_DEFAULT_HEIGHT, "invalid_default_overlay_size"
+    raw_url = str(advanced.get(CONF_REMOTE_HOME_ASSISTANT_URL) or "").strip()
+    token = str(advanced.get(CONF_REMOTE_ACCESS_TOKEN) or "").strip()
+    remote_url = (raw_url or suggested_remote_home_assistant_url(hass)) if token else ""
+    if bool(remote_url) != bool(token):
+        return {}, "base", "remote_fields_required"
+
+    options = _basic_options(
+        default_stream_type=stream_type,
+        default_duration=duration,
+        default_snapshot_fallback=bool(values.get(CONF_DEFAULT_SNAPSHOT_FALLBACK)),
+        prefer_remote_transport=bool(values.get(CONF_PREFER_REMOTE_TRANSPORT)),
+        power_entity=str(power.get(CONF_POWER_ENTITY) or "").strip(),
+    )
+    options[CONF_DEFAULT_POSITION] = position
+    if width > 0:
+        options[CONF_DEFAULT_WIDTH] = width
+    if height > 0:
+        options[CONF_DEFAULT_HEIGHT] = height
+    if remote_url and token:
+        options[CONF_REMOTE_HOME_ASSISTANT_URL] = remote_url
+        options[CONF_REMOTE_ACCESS_TOKEN] = token
+    options.update(
+        schedule_options(
+            {
+                CONF_WAKE_MODE: power.get(CONF_WAKE_MODE),
+                CONF_WAKE_START: power.get(CONF_WAKE_START),
+                CONF_WAKE_END: power.get(CONF_WAKE_END),
+                **{key: dnd.get(key) for key in dnd},
+            }
+        )
+    )
+    if not options[CONF_DND_ENTITY]:
+        options.pop(CONF_DND_ENTITY)
+    options.update(
+        still_options({key: power.get(key) for key in _STILL_KEYS})
+    )
+    _preserve_camera_defaults(entry, options)
+    return options, None, None
+
+
+def _remote_setup_changed(entry: Any, options: dict[str, Any]) -> bool:
+    """Only contact the TV when the remote receiver settings actually change."""
+
+    return any(
+        str(options.get(key, "")).strip()
+        != str(entry.options.get(key, "")).strip()
+        for key in (CONF_REMOTE_HOME_ASSISTANT_URL, CONF_REMOTE_ACCESS_TOKEN)
+    )
+
+
+def _appearance_changed(hass: Any, submitted: dict[str, Any]) -> bool:
+    return bool(normalize_appearance(submitted) != popup_appearance(hass))
+
+
+def _schedule_test_popup(hass: Any, entry: Any) -> None:
+    """Send a test popup once the new options are in place."""
+
+    async def _send() -> None:
+        await asyncio.sleep(TEST_AFTER_SAVE_DELAY_S)
+        from .services import async_send_test_popup
+
+        try:
+            await async_send_test_popup(hass, entry)
+        except Exception as error:  # noqa: BLE001
+            _LOGGER.warning("Test popup to %s failed: %s", entry.title, error)
+
+    create_task = getattr(hass, "async_create_background_task", None)
+    if callable(create_task):
+        create_task(_send(), f"ha_tv_pip_plus test popup {entry.entry_id}")
+    else:
+        hass.async_create_task(_send())
+
+
+def _options_schema(values: dict[str, Any]) -> dict[Any, Any]:
+    """The whole options dialog, prefilled with `values`."""
+
+    power = values[SECTION_POWER]
+    dnd = values[SECTION_DND]
+    advanced = values[SECTION_ADVANCED]
+    camera_values = values[SECTION_CAMERA_BUTTONS]
+
+    camera_fields: dict[Any, Any] = {}
+    for slot in range(1, MAX_CAMERA_BUTTONS + 1):
+        for key, selector in (
+            (f"camera_{slot}", _entity_selector(("camera",))),
+            (f"button_target_{slot}", _entity_selector(BUTTON_TARGET_DOMAINS)),
+            (f"button_label_{slot}", str),
+        ):
+            camera_fields[_optional_suggested(key, camera_values.get(key))] = selector
+
+    return {
+        vol.Optional(
+            CONF_DEFAULT_STREAM_TYPE, default=values[CONF_DEFAULT_STREAM_TYPE]
+        ): _select_dropdown(STREAM_TYPES),
+        vol.Optional(
+            CONF_DEFAULT_DURATION_SECONDS,
+            default=values[CONF_DEFAULT_DURATION_SECONDS],
+        ): int,
+        vol.Optional(
+            CONF_DEFAULT_SNAPSHOT_FALLBACK,
+            default=bool(values[CONF_DEFAULT_SNAPSHOT_FALLBACK]),
+        ): bool,
+        vol.Optional(
+            CONF_PREFER_REMOTE_TRANSPORT,
+            default=bool(values[CONF_PREFER_REMOTE_TRANSPORT]),
+        ): bool,
+        vol.Required(SECTION_POWER): _section(
+            {
+                _optional_suggested(
+                    CONF_POWER_ENTITY, power.get(CONF_POWER_ENTITY)
+                ): _entity_selector(("media_player", "remote")),
+                vol.Optional(
+                    CONF_WAKE_MODE, default=power[CONF_WAKE_MODE]
+                ): _choice_selector(WAKE_MODES, "wake_tv"),
+                vol.Optional(
+                    CONF_WAKE_START, default=power[CONF_WAKE_START]
+                ): _time_selector(),
+                vol.Optional(
+                    CONF_WAKE_END, default=power[CONF_WAKE_END]
+                ): _time_selector(),
+                vol.Optional(
+                    CONF_WOKEN_TV_VIEW, default=power[CONF_WOKEN_TV_VIEW]
+                ): _choice_selector(WOKEN_TV_VIEWS, "woken_tv_view"),
+                vol.Optional(
+                    CONF_STILL_EVENT_IMAGE,
+                    default=bool(power[CONF_STILL_EVENT_IMAGE]),
+                ): bool,
+                vol.Optional(
+                    CONF_STILL_ZOOM, default=power[CONF_STILL_ZOOM]
+                ): _zoom_selector(),
+                vol.Optional(
+                    CONF_STILL_FOCUS, default=power[CONF_STILL_FOCUS]
+                ): _choice_selector(STILL_FOCUS_AREAS, "still_focus"),
+                vol.Optional(
+                    CONF_STILL_FISHEYE_CAMERAS,
+                    default=list(power[CONF_STILL_FISHEYE_CAMERAS]),
+                ): _camera_list_selector(),
+            },
+            collapsed=False,
+        ),
+        vol.Required(SECTION_DND): _section(
+            {
+                vol.Optional(CONF_DND, default=bool(dnd[CONF_DND])): bool,
+                _optional_suggested(
+                    CONF_DND_ENTITY, dnd.get(CONF_DND_ENTITY)
+                ): _any_entity_selector(),
+                vol.Optional(
+                    CONF_DND_ENTITY_STATE, default=dnd[CONF_DND_ENTITY_STATE]
+                ): _choice_selector(DND_ENTITY_STATES, "do_not_disturb_entity_state"),
+                vol.Optional(
+                    CONF_DND_SCHEDULE, default=bool(dnd[CONF_DND_SCHEDULE])
+                ): bool,
+                vol.Optional(
+                    CONF_DND_START, default=dnd[CONF_DND_START]
+                ): _time_selector(),
+                vol.Optional(CONF_DND_END, default=dnd[CONF_DND_END]): _time_selector(),
+            },
+            collapsed=False,
+        ),
+        vol.Required(SECTION_CAMERA_BUTTONS): _section(camera_fields, collapsed=True),
+        vol.Required(SECTION_APPEARANCE): _section(
+            appearance_form_fields(normalize_appearance(values[SECTION_APPEARANCE])),
+            collapsed=True,
+        ),
+        vol.Required(SECTION_ADVANCED): _section(
+            {
+                vol.Optional(
+                    CONF_DEFAULT_POSITION, default=advanced[CONF_DEFAULT_POSITION]
+                ): _select_dropdown(NOTIFICATION_POSITIONS),
+                vol.Optional(
+                    CONF_DEFAULT_WIDTH, default=advanced[CONF_DEFAULT_WIDTH]
+                ): int,
+                vol.Optional(
+                    CONF_DEFAULT_HEIGHT, default=advanced[CONF_DEFAULT_HEIGHT]
+                ): int,
+                vol.Optional(
+                    CONF_REMOTE_HOME_ASSISTANT_URL,
+                    default=advanced[CONF_REMOTE_HOME_ASSISTANT_URL],
+                ): str,
+                vol.Optional(
+                    CONF_REMOTE_ACCESS_TOKEN,
+                    default=advanced[CONF_REMOTE_ACCESS_TOKEN],
+                ): str,
+            },
+            collapsed=True,
+        ),
+        vol.Optional(CONF_SEND_TEST, default=False): bool,
+    }
 
 
 def appearance_form_fields(current: dict[str, Any]) -> dict[Any, Any]:
@@ -909,70 +1138,9 @@ def _basic_options(
     return options
 
 
-def _options_with_preserved_advanced(
-    entry: Any,
-    basic_options: dict[str, Any],
-) -> dict[str, Any]:
-    options = dict(basic_options)
-    _preserve_camera_defaults(entry, options)
-    _preserve_advanced_options(entry, options)
-    return options
-
-
-def _options_with_advanced(
-    entry: Any,
-    basic_options: dict[str, Any],
-    *,
-    default_position: str,
-    default_width: int,
-    default_height: int,
-    remote_url: str,
-    remote_token: str,
-) -> dict[str, Any]:
-    options = dict(basic_options)
-    options[CONF_DEFAULT_POSITION] = default_position
-    if default_width > 0:
-        options[CONF_DEFAULT_WIDTH] = default_width
-    if default_height > 0:
-        options[CONF_DEFAULT_HEIGHT] = default_height
-    if remote_url and remote_token:
-        options[CONF_REMOTE_HOME_ASSISTANT_URL] = remote_url
-        options[CONF_REMOTE_ACCESS_TOKEN] = remote_token
-    _preserve_camera_defaults(entry, options)
-    return options
-
-
 def _preserve_camera_defaults(entry: Any, options: dict[str, Any]) -> None:
     if CONF_CAMERA_DEFAULTS in entry.options:
         options[CONF_CAMERA_DEFAULTS] = dict(entry.options[CONF_CAMERA_DEFAULTS])
-
-
-def _preserve_advanced_options(entry: Any, options: dict[str, Any]) -> None:
-    position = str(entry.options.get(CONF_DEFAULT_POSITION, "top_right")).strip()
-    if position in NOTIFICATION_POSITIONS:
-        options[CONF_DEFAULT_POSITION] = position
-
-    width = _optional_default_int(
-        entry.options.get(CONF_DEFAULT_WIDTH),
-        minimum=0,
-        maximum=1600,
-    )
-    if width is not None and width > 0:
-        options[CONF_DEFAULT_WIDTH] = width
-
-    height = _optional_default_int(
-        entry.options.get(CONF_DEFAULT_HEIGHT),
-        minimum=0,
-        maximum=900,
-    )
-    if height is not None and height > 0:
-        options[CONF_DEFAULT_HEIGHT] = height
-
-    remote_url = str(entry.options.get(CONF_REMOTE_HOME_ASSISTANT_URL, "")).strip()
-    remote_token = str(entry.options.get(CONF_REMOTE_ACCESS_TOKEN, "")).strip()
-    if remote_url and remote_token:
-        options[CONF_REMOTE_HOME_ASSISTANT_URL] = remote_url
-        options[CONF_REMOTE_ACCESS_TOKEN] = remote_token
 
 
 def _create_receiver_entry(
@@ -980,6 +1148,7 @@ def _create_receiver_entry(
     receiver: ReceiverDiscovery,
     *,
     token: str | None = None,
+    options: dict[str, Any] | None = None,
 ) -> Any:
     """Create a Home Assistant config entry from receiver details."""
 
@@ -996,6 +1165,12 @@ def _create_receiver_entry(
         data[CONF_TOKEN] = token
 
     flow.context["title_placeholders"] = {"name": receiver.name}
+    if options:
+        return flow.async_create_entry(
+            title=receiver.name,
+            data=data,
+            options=options,
+        )
     return flow.async_create_entry(
         title=receiver.name,
         data=data,

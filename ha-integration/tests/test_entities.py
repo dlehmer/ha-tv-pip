@@ -9,6 +9,7 @@ import custom_components.ha_tv_pip_plus.button as button
 import custom_components.ha_tv_pip_plus.diagnostics as diagnostics
 import custom_components.ha_tv_pip_plus.repairs as repairs
 import custom_components.ha_tv_pip_plus.sensor as sensor
+import custom_components.ha_tv_pip_plus.services as services
 import custom_components.ha_tv_pip_plus.switch as switch
 import custom_components.ha_tv_pip_plus.version as version_helpers
 from custom_components.ha_tv_pip_plus.client import (
@@ -224,18 +225,21 @@ def test_binary_sensor_setup_adds_connected_sensor() -> None:
         "device-1_remote_connected",
         "device-1_overlay_permission",
         "device-1_camera_restreaming_recommended",
+        "device-1_do_not_disturb_active",
     ]
     assert [entity._attr_translation_key for entity in added] == [
         "connected",
         "remote_connected",
         "overlay_permission",
         "camera_restreaming_recommended",
+        "do_not_disturb_active",
     ]
-    assert [entity._attr_entity_category for entity in added] == [
+    assert [getattr(entity, "_attr_entity_category", None) for entity in added] == [
         "diagnostic",
         "diagnostic",
         "diagnostic",
         "diagnostic",
+        None,
     ]
 
 
@@ -285,7 +289,11 @@ def test_switch_setup_adds_launcher_visibility_switch() -> None:
 
     asyncio.run(switch.async_setup_entry(None, _entry(), added.extend))
 
-    assert len(added) == 1
+    assert len(added) == 3
+    assert [entity._attr_unique_id for entity in added[1:]] == [
+        "device-1_do_not_disturb",
+        "device-1_do_not_disturb_schedule",
+    ]
     assert added[0]._attr_unique_id == "device-1_hide_launcher"
     assert added[0]._attr_name == "Hide Launcher"
     assert added[0]._attr_translation_key == "hide_launcher"
@@ -1074,8 +1082,8 @@ def test_test_button_sends_public_test_stream(monkeypatch) -> None:  # type: ign
         )
         return "local"
 
-    monkeypatch.setattr(button, "remote_registry", lambda hass: FakeRemoteRegistry())
-    monkeypatch.setattr(button, "_async_send_receiver_command", fake_send)
+    monkeypatch.setattr(services, "remote_registry", lambda hass: FakeRemoteRegistry())
+    monkeypatch.setattr(services, "_async_send_receiver_command", fake_send)
 
     asyncio.run(button.ReceiverTestButton(hass, _entry()).async_press())
 
@@ -1120,8 +1128,8 @@ def test_test_button_prefers_remote_transport_when_enabled(monkeypatch) -> None:
     entry = _entry()
     entry.options = {CONF_PREFER_REMOTE_TRANSPORT: True}
 
-    monkeypatch.setattr(button, "remote_registry", lambda hass: FakeRemoteRegistry())
-    monkeypatch.setattr(button, "_async_send_receiver_command", fake_send)
+    monkeypatch.setattr(services, "remote_registry", lambda hass: FakeRemoteRegistry())
+    monkeypatch.setattr(services, "_async_send_receiver_command", fake_send)
 
     asyncio.run(button.ReceiverTestButton(hass, entry).async_press())
 
@@ -1544,3 +1552,48 @@ def test_diagnostics_redacts_token_and_url(monkeypatch) -> None:  # type: ignore
     assert result["receiver_status"]["remote"]["accessToken"] == diagnostics.REDACTED
     assert result["receiver_status"]["pairing"]["token"] == diagnostics.REDACTED
     assert result["receiver_error"] is None
+
+
+def test_schedule_entities_read_and_write_tv_options() -> None:
+    from datetime import time as dt_time
+
+    import custom_components.ha_tv_pip_plus.select as select_platform
+    import custom_components.ha_tv_pip_plus.time as time_platform
+
+    entry = _entry()
+    entry.options = {}
+
+    def update_entry(target: Any, options: dict[str, Any]) -> None:
+        target.options = options
+
+    hass = FakeHass()
+    hass.config_entries = type(  # type: ignore[attr-defined]
+        "Entries", (), {"async_update_entry": staticmethod(update_entry)}
+    )()
+
+    switches: list[Any] = []
+    asyncio.run(switch.async_setup_entry(hass, entry, switches.extend))
+    dnd_switch = switches[1]
+    assert dnd_switch.is_on is False
+    asyncio.run(dnd_switch.async_turn_on())
+    assert entry.options["do_not_disturb"] is True
+    assert dnd_switch.is_on is True
+
+    sensors: list[Any] = []
+    asyncio.run(binary_sensor.async_setup_entry(hass, entry, sensors.extend))
+    assert sensors[-1].is_on is True
+    assert sensors[-1].extra_state_attributes["reason"] == "switch"
+
+    times: list[Any] = []
+    asyncio.run(time_platform.async_setup_entry(hass, entry, times.extend))
+    start = times[0]
+    assert start.native_value == dt_time(22, 0)
+    asyncio.run(start.async_set_value(dt_time(21, 15)))
+    assert entry.options["do_not_disturb_start"] == "21:15:00"
+
+    selects: list[Any] = []
+    asyncio.run(select_platform.async_setup_entry(hass, entry, selects.extend))
+    wake = selects[0]
+    assert wake.current_option == "always"
+    asyncio.run(wake.async_select_option("scheduled"))
+    assert entry.options["wake_tv"] == "scheduled"

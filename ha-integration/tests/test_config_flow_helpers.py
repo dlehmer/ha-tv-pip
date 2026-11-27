@@ -33,8 +33,8 @@ class FakeOptionsFlow:
 config_entries.ConfigFlow = FakeConfigFlow  # type: ignore[attr-defined]
 config_entries.OptionsFlow = FakeOptionsFlow  # type: ignore[attr-defined]
 voluptuous.Schema = lambda schema: schema  # type: ignore[attr-defined]
-voluptuous.Required = lambda key: key  # type: ignore[attr-defined]
-voluptuous.Optional = lambda key, default=None: key  # type: ignore[attr-defined]
+voluptuous.Required = lambda key, **kwargs: key  # type: ignore[attr-defined]
+voluptuous.Optional = lambda key, default=None, **kwargs: key  # type: ignore[attr-defined]
 voluptuous.Any = lambda *values: values  # type: ignore[attr-defined]
 homeassistant.config_entries = config_entries  # type: ignore[attr-defined]
 sys.modules.setdefault("homeassistant", homeassistant)
@@ -57,12 +57,26 @@ from custom_components.ha_tv_pip_plus.const import (  # noqa: E402
     CONF_PREFER_REMOTE_TRANSPORT,
     CONF_REMOTE_ACCESS_TOKEN,
     CONF_REMOTE_HOME_ASSISTANT_URL,
-    CONF_EDIT_CAMERA_BUTTONS,
-    CONF_EDIT_POPUP_APPEARANCE,
-    CONF_SHOW_ADVANCED_OPTIONS,
     CONF_VERSION,
 )
+from custom_components.ha_tv_pip_plus.schedule import (  # noqa: E402
+    CONF_DND,
+    CONF_DND_END,
+    CONF_DND_ENTITY,
+    CONF_DND_ENTITY_STATE,
+    CONF_DND_SCHEDULE,
+    CONF_DND_START,
+    CONF_WAKE_END,
+    CONF_WAKE_MODE,
+    CONF_WAKE_START,
+)
 from custom_components.ha_tv_pip_plus.config_flow import (  # noqa: E402
+    CONF_SEND_TEST,
+    SECTION_ADVANCED,
+    SECTION_APPEARANCE,
+    SECTION_CAMERA_BUTTONS,
+    SECTION_DND,
+    SECTION_POWER,
     ConfigFlow,
     ReceiverOptionsFlow,
     _create_receiver_entry,
@@ -200,7 +214,7 @@ def test_options_flow_factory_is_exposed_at_module_and_class_level() -> None:
     assert isinstance(class_flow, ReceiverOptionsFlow)
 
 
-def test_options_flow_init_step_returns_basic_defaults_form() -> None:
+def test_options_flow_is_one_dialog_with_sections_and_test() -> None:
     flow = ReceiverOptionsFlow(types.SimpleNamespace(options={}))
 
     result = asyncio.run(flow.async_step_init())
@@ -212,10 +226,31 @@ def test_options_flow_init_step_returns_basic_defaults_form() -> None:
         CONF_DEFAULT_DURATION_SECONDS,
         CONF_DEFAULT_SNAPSHOT_FALLBACK,
         CONF_PREFER_REMOTE_TRANSPORT,
+        SECTION_POWER,
+        SECTION_DND,
+        SECTION_CAMERA_BUTTONS,
+        SECTION_APPEARANCE,
+        SECTION_ADVANCED,
+        CONF_SEND_TEST,
+    ]
+    assert list(result["data_schema"][SECTION_DND].keys()) == [
+        CONF_DND,
+        CONF_DND_ENTITY,
+        CONF_DND_ENTITY_STATE,
+        CONF_DND_SCHEDULE,
+        CONF_DND_START,
+        CONF_DND_END,
+    ]
+    assert list(result["data_schema"][SECTION_POWER].keys()) == [
         CONF_POWER_ENTITY,
-        CONF_EDIT_CAMERA_BUTTONS,
-        CONF_EDIT_POPUP_APPEARANCE,
-        CONF_SHOW_ADVANCED_OPTIONS,
+        CONF_WAKE_MODE,
+        CONF_WAKE_START,
+        CONF_WAKE_END,
+        "woken_tv_view",
+        "still_use_event_image",
+        "still_zoom",
+        "still_focus",
+        "still_fisheye_cameras",
     ]
 
 
@@ -232,14 +267,10 @@ def test_select_dropdown_uses_test_fallback_without_home_assistant_selector() ->
     assert _select_dropdown(("auto", "hls")) == ("auto", "hls")
 
 
-def test_options_flow_basic_step_stores_common_defaults_and_preserves_advanced(
-) -> None:
+def test_options_flow_saves_everything_from_one_dialog() -> None:
     flow = ReceiverOptionsFlow(
         types.SimpleNamespace(
             options={
-                CONF_DEFAULT_HEIGHT: 360,
-                CONF_DEFAULT_POSITION: "bottom_right",
-                CONF_DEFAULT_WIDTH: 640,
                 CONF_REMOTE_ACCESS_TOKEN: "remote-token",
                 CONF_REMOTE_HOME_ASSISTANT_URL: "https://ha.example.test",
             }
@@ -253,7 +284,31 @@ def test_options_flow_basic_step_stores_common_defaults_and_preserves_advanced(
                 CONF_DEFAULT_SNAPSHOT_FALLBACK: False,
                 CONF_DEFAULT_STREAM_TYPE: "mjpeg_first",
                 CONF_PREFER_REMOTE_TRANSPORT: False,
-                CONF_SHOW_ADVANCED_OPTIONS: False,
+                SECTION_POWER: {
+                    CONF_POWER_ENTITY: "remote.living_room_tv",
+                    CONF_WAKE_MODE: "scheduled",
+                    CONF_WAKE_START: "08:00:00",
+                    CONF_WAKE_END: "21:30",
+                    "woken_tv_view": "still_then_live",
+                    "still_zoom": 2,
+                    "still_focus": "top",
+                    "still_fisheye_cameras": ["camera.front_door"],
+                },
+                SECTION_DND: {
+                    CONF_DND: False,
+                    CONF_DND_ENTITY: "input_boolean.movie_night",
+                    CONF_DND_ENTITY_STATE: "off",
+                    CONF_DND_SCHEDULE: True,
+                    CONF_DND_START: "23:00:00",
+                    CONF_DND_END: "06:30:00",
+                },
+                SECTION_ADVANCED: {
+                    CONF_DEFAULT_POSITION: "bottom_right",
+                    CONF_DEFAULT_WIDTH: 640,
+                    CONF_DEFAULT_HEIGHT: 360,
+                    CONF_REMOTE_ACCESS_TOKEN: "remote-token",
+                    CONF_REMOTE_HOME_ASSISTANT_URL: "https://ha.example.test",
+                },
             }
         )
     )
@@ -268,153 +323,220 @@ def test_options_flow_basic_step_stores_common_defaults_and_preserves_advanced(
             CONF_DEFAULT_SNAPSHOT_FALLBACK: False,
             CONF_DEFAULT_STREAM_TYPE: "mjpeg_first",
             CONF_DEFAULT_WIDTH: 640,
+            CONF_POWER_ENTITY: "remote.living_room_tv",
             CONF_PREFER_REMOTE_TRANSPORT: False,
             CONF_REMOTE_ACCESS_TOKEN: "remote-token",
             CONF_REMOTE_HOME_ASSISTANT_URL: "https://ha.example.test",
+            CONF_DND: False,
+            CONF_DND_ENTITY: "input_boolean.movie_night",
+            CONF_DND_ENTITY_STATE: "off",
+            CONF_DND_SCHEDULE: True,
+            CONF_DND_START: "23:00:00",
+            CONF_DND_END: "06:30:00",
+            CONF_WAKE_MODE: "scheduled",
+            CONF_WAKE_START: "08:00:00",
+            CONF_WAKE_END: "21:30:00",
+            "woken_tv_view": "still_then_live",
+            "still_zoom": 2.0,
+            "still_focus": "top",
+            "still_fisheye_cameras": ["camera.front_door"],
+            "still_use_event_image": False,
         },
     }
 
 
-def test_options_flow_opens_advanced_step_when_requested(
+def test_options_flow_keeps_settings_not_shown_and_skips_unchanged_remote_sync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flow = ReceiverOptionsFlow(
+        types.SimpleNamespace(
+            options={
+                CONF_DEFAULT_POSITION: "bottom_left",
+                CONF_REMOTE_ACCESS_TOKEN: "remote-token",
+                CONF_REMOTE_HOME_ASSISTANT_URL: "https://ha.example.test",
+                CONF_DND: True,
+            }
+        )
+    )
+
+    async def fail_sync(*args: Any) -> bool:
+        raise AssertionError("the TV should not be contacted")
+
+    monkeypatch.setattr(
+        "custom_components.ha_tv_pip_plus.config_flow.async_sync_remote_setup_values",
+        fail_sync,
+    )
+
+    result = asyncio.run(flow.async_step_init({CONF_DEFAULT_STREAM_TYPE: "hls"}))
+
+    data = result["data"]
+    assert data[CONF_DEFAULT_STREAM_TYPE] == "hls"
+    assert data[CONF_DEFAULT_POSITION] == "bottom_left"
+    assert data[CONF_REMOTE_ACCESS_TOKEN] == "remote-token"
+    assert data[CONF_DND] is True
+    assert data[CONF_WAKE_MODE] == "always"
+    assert CONF_DND_ENTITY not in data
+
+
+def test_options_flow_syncs_new_remote_setup_with_suggested_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     flow = ReceiverOptionsFlow(types.SimpleNamespace(options={}))
-    flow.hass = object()
+    flow.hass = None
+    synced: dict[str, Any] = {}
     monkeypatch.setattr(
         "custom_components.ha_tv_pip_plus.config_flow.suggested_remote_home_assistant_url",
         lambda hass: "https://example.ui.nabu.casa",
     )
 
+    async def fake_sync(hass: Any, entry: Any, url: str, token: str) -> bool:
+        synced.update(url=url, token=token)
+        return True
+
+    monkeypatch.setattr(
+        "custom_components.ha_tv_pip_plus.config_flow.async_sync_remote_setup_values",
+        fake_sync,
+    )
+
     result = asyncio.run(
         flow.async_step_init(
             {
-                CONF_DEFAULT_DURATION_SECONDS: 20,
-                CONF_DEFAULT_SNAPSHOT_FALLBACK: True,
-                CONF_DEFAULT_STREAM_TYPE: "auto",
-                CONF_PREFER_REMOTE_TRANSPORT: False,
-                CONF_SHOW_ADVANCED_OPTIONS: True,
+                SECTION_ADVANCED: {
+                    CONF_DEFAULT_POSITION: "top_right",
+                    CONF_DEFAULT_WIDTH: 0,
+                    CONF_DEFAULT_HEIGHT: 0,
+                    CONF_REMOTE_ACCESS_TOKEN: "remote-token",
+                    CONF_REMOTE_HOME_ASSISTANT_URL: "",
+                }
+            }
+        )
+    )
+
+    assert synced == {"url": "https://example.ui.nabu.casa", "token": "remote-token"}
+    assert (
+        result["data"][CONF_REMOTE_HOME_ASSISTANT_URL]
+        == "https://example.ui.nabu.casa"
+    )
+
+
+def test_options_flow_shows_error_when_remote_sync_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    flow = ReceiverOptionsFlow(types.SimpleNamespace(options={}))
+
+    async def fake_sync(*args: Any) -> bool:
+        return False
+
+    monkeypatch.setattr(
+        "custom_components.ha_tv_pip_plus.config_flow.async_sync_remote_setup_values",
+        fake_sync,
+    )
+
+    result = asyncio.run(
+        flow.async_step_init(
+            {
+                SECTION_ADVANCED: {
+                    CONF_REMOTE_ACCESS_TOKEN: "remote-token",
+                    CONF_REMOTE_HOME_ASSISTANT_URL: "https://ha.example.test",
+                }
             }
         )
     )
 
     assert result["type"] == "form"
-    assert result["step_id"] == "advanced"
-    assert result["description_placeholders"] == {
-        "suggested_url": "https://example.ui.nabu.casa"
-    }
+    assert result["errors"] == {"base": "cannot_connect"}
 
 
-def test_options_flow_advanced_step_saves_remote_setup_and_pending_defaults(
+def test_options_flow_send_test_schedules_a_test_popup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    flow = ReceiverOptionsFlow(types.SimpleNamespace(options={}))
-    flow.hass = object()
-    synced: dict[str, Any] = {}
-
+    scheduled: list[Any] = []
+    hass = types.SimpleNamespace(
+        data={},
+        async_create_background_task=lambda coro, name: scheduled.append(coro),
+    )
+    flow = ReceiverOptionsFlow(
+        types.SimpleNamespace(options={}, entry_id="entry-1", title="TV")
+    )
+    flow.hass = hass
     monkeypatch.setattr(
         "custom_components.ha_tv_pip_plus.config_flow.suggested_remote_home_assistant_url",
-        lambda hass: "https://example.ui.nabu.casa",
+        lambda hass: "",
     )
 
-    async def fake_sync(
-        hass: Any,
-        config_entry: Any,
-        remote_url: str,
-        remote_token: str,
-    ) -> bool:
-        synced["remote_url"] = remote_url
-        synced["remote_token"] = remote_token
-        return True
+    async def no_save(*args: Any) -> None:
+        return None
 
     monkeypatch.setattr(
-        "custom_components.ha_tv_pip_plus.config_flow.async_sync_remote_setup_values",
-        fake_sync,
+        "custom_components.ha_tv_pip_plus.config_flow.async_save_appearance", no_save
+    )
+    monkeypatch.setattr(
+        "custom_components.ha_tv_pip_plus.config_flow.async_save_camera_buttons",
+        no_save,
     )
 
-    first_result = asyncio.run(
-        flow.async_step_init(
-            {
-                CONF_DEFAULT_DURATION_SECONDS: 20,
-                CONF_DEFAULT_SNAPSHOT_FALLBACK: True,
-                CONF_DEFAULT_STREAM_TYPE: "auto",
-                CONF_PREFER_REMOTE_TRANSPORT: False,
-                CONF_SHOW_ADVANCED_OPTIONS: True,
-            }
-        )
-    )
-    assert first_result["step_id"] == "advanced"
+    result = asyncio.run(flow.async_step_init({CONF_SEND_TEST: True}))
 
+    assert result["type"] == "create_entry"
+    assert CONF_SEND_TEST not in result["data"]
+    assert len(scheduled) == 1
+    scheduled[0].close()
+
+
+def _finished_flow(hass: Any = None) -> ConfigFlow:
+    flow = ConfigFlow()
+    flow.__dict__.update(
+        context={},
+        hass=hass,
+        async_show_form=lambda **kwargs: {"type": "form", **kwargs},
+        async_create_entry=lambda **kwargs: {"type": "create_entry", **kwargs},
+    )
+    flow._finished_receiver = ReceiverDiscovery(
+        device_id="device-1",
+        name="Den TV",
+        host="10.0.0.5",
+        port=8767,
+        version="1.37.0",
+        pairing="paired",
+        api_version=1,
+    )
+    flow._finished_token = "token"
+    return flow
+
+
+def test_setup_asks_about_turning_the_tv_on_with_pairing_help() -> None:
+    result = asyncio.run(_finished_flow().async_step_turn_tv_on())
+
+    assert result["step_id"] == "turn_tv_on"
+    assert list(result["data_schema"].keys()) == [CONF_WAKE_MODE, CONF_POWER_ENTITY]
+    placeholders = result["description_placeholders"]
+    assert placeholders["host"] == "10.0.0.5"
+    assert "androidtv_remote" in placeholders["pair_remote_url"]
+
+
+def test_setup_needs_a_power_entity_to_turn_the_tv_on() -> None:
     result = asyncio.run(
-        flow.async_step_advanced(
-            {
-                CONF_DEFAULT_HEIGHT: 405,
-                CONF_DEFAULT_POSITION: "bottom_right",
-                CONF_DEFAULT_WIDTH: 720,
-                CONF_REMOTE_ACCESS_TOKEN: "remote-token",
-                CONF_REMOTE_HOME_ASSISTANT_URL: "https://ha.example.test",
-            }
-        )
+        _finished_flow().async_step_turn_tv_on({CONF_WAKE_MODE: "always"})
     )
 
-    assert synced == {
-        "remote_url": "https://ha.example.test",
-        "remote_token": "remote-token",
-    }
-    assert result == {
-        "type": "create_entry",
-        "title": "",
-        "data": {
-            CONF_DEFAULT_DURATION_SECONDS: 20,
-            CONF_DEFAULT_HEIGHT: 405,
-            CONF_DEFAULT_POSITION: "bottom_right",
-            CONF_DEFAULT_SNAPSHOT_FALLBACK: True,
-            CONF_DEFAULT_STREAM_TYPE: "auto",
-            CONF_DEFAULT_WIDTH: 720,
-            CONF_PREFER_REMOTE_TRANSPORT: False,
-            CONF_REMOTE_ACCESS_TOKEN: "remote-token",
-            CONF_REMOTE_HOME_ASSISTANT_URL: "https://ha.example.test",
-        },
-    }
+    assert result["errors"] == {CONF_POWER_ENTITY: "power_entity_required"}
 
 
-def test_options_flow_advanced_step_uses_suggested_remote_url_when_token_is_provided(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    flow = ReceiverOptionsFlow(types.SimpleNamespace(options={}))
-    flow.hass = object()
-
-    monkeypatch.setattr(
-        "custom_components.ha_tv_pip_plus.config_flow.suggested_remote_home_assistant_url",
-        lambda hass: "https://example.ui.nabu.casa",
-    )
-
-    async def fake_sync(
-        hass: Any,
-        config_entry: Any,
-        remote_url: str,
-        remote_token: str,
-    ) -> bool:
-        return True
-
-    monkeypatch.setattr(
-        "custom_components.ha_tv_pip_plus.config_flow.async_sync_remote_setup_values",
-        fake_sync,
-    )
-
+def test_setup_saves_turn_on_choice_as_options() -> None:
     result = asyncio.run(
-        flow.async_step_advanced(
-            {
-                CONF_DEFAULT_HEIGHT: 0,
-                CONF_DEFAULT_POSITION: "top_right",
-                CONF_DEFAULT_WIDTH: 0,
-                CONF_REMOTE_ACCESS_TOKEN: "remote-token",
-                CONF_REMOTE_HOME_ASSISTANT_URL: "",
-            }
+        _finished_flow().async_step_turn_tv_on(
+            {CONF_WAKE_MODE: "always", CONF_POWER_ENTITY: "remote.den_tv"}
         )
     )
 
-    assert result["data"][CONF_REMOTE_ACCESS_TOKEN] == "remote-token"
-    assert (
-        result["data"][CONF_REMOTE_HOME_ASSISTANT_URL]
-        == "https://example.ui.nabu.casa"
+    assert result["type"] == "create_entry"
+    assert result["data"]["token"] == "token"
+    assert result["options"] == {
+        CONF_WAKE_MODE: "always",
+        CONF_POWER_ENTITY: "remote.den_tv",
+    }
+
+    never = asyncio.run(
+        _finished_flow().async_step_turn_tv_on({CONF_WAKE_MODE: "never"})
     )
+    assert never["options"] == {CONF_WAKE_MODE: "never"}

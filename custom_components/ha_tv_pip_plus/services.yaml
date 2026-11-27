@@ -3,6 +3,13 @@ show_camera:
     device:
       integration: ha_tv_pip_plus
   fields:
+    ignore_do_not_disturb:
+      required: false
+      default: false
+      selector:
+        boolean:
+      name: Ignore do not disturb
+      description: Show this popup even if the TV is in do not disturb. Use it for things that must get through, like a doorbell or an alarm.
     actions:
       required: false
       selector:
@@ -193,6 +200,13 @@ show_snapshot:
     device:
       integration: ha_tv_pip_plus
   fields:
+    ignore_do_not_disturb:
+      required: false
+      default: false
+      selector:
+        boolean:
+      name: Ignore do not disturb
+      description: Show this popup even if the TV is in do not disturb. Use it for things that must get through, like a doorbell or an alarm.
     actions:
       required: false
       selector:
@@ -330,6 +344,13 @@ show_notification:
     device:
       integration: ha_tv_pip_plus
   fields:
+    ignore_do_not_disturb:
+      required: false
+      default: false
+      selector:
+        boolean:
+      name: Ignore do not disturb
+      description: Show this popup even if the TV is in do not disturb. Use it for things that must get through, like a doorbell or an alarm.
     actions:
       required: false
       selector:

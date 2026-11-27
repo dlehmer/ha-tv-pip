@@ -13,6 +13,8 @@ from .client import (
 from .const import CONF_TOKEN
 from .entity import ReceiverEntity
 from .remote import remote_registry
+from .schedule import CONF_DND, CONF_DND_SCHEDULE
+from .schedule_entity import ReceiverScheduleEntity
 from .services import (
     _async_get_receiver_status_command,
     _prefer_remote_transport,
@@ -48,7 +50,60 @@ else:
 async def async_setup_entry(hass: Any, entry: Any, async_add_entities: Any) -> None:
     """Set up HA TV PiP Plus receiver switches."""
 
-    async_add_entities([ReceiverLauncherSwitch(entry, hass=hass)])
+    async_add_entities(
+        [
+            ReceiverLauncherSwitch(entry, hass=hass),
+            ReceiverDoNotDisturbSwitch(hass, entry),
+            ReceiverDoNotDisturbScheduleSwitch(hass, entry),
+        ]
+    )
+
+
+class ReceiverDoNotDisturbSwitch(ReceiverScheduleEntity, SwitchEntity):
+    """Turn do not disturb on or off for this TV by hand."""
+
+    def __init__(self, hass: Any, entry: Any) -> None:
+        super().__init__(
+            hass,
+            entry,
+            key="do_not_disturb",
+            name="Do not disturb",
+            icon="mdi:bell-off",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.settings[CONF_DND])
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._async_set(CONF_DND, True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._async_set(CONF_DND, False)
+
+
+class ReceiverDoNotDisturbScheduleSwitch(ReceiverScheduleEntity, SwitchEntity):
+    """Use this TV's do-not-disturb hours (see the start and end time entities)."""
+
+    def __init__(self, hass: Any, entry: Any) -> None:
+        super().__init__(
+            hass,
+            entry,
+            key="do_not_disturb_schedule",
+            name="Do not disturb schedule",
+            icon="mdi:bell-sleep",
+        )
+        self._attr_entity_category = EntityCategory.CONFIG
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.settings[CONF_DND_SCHEDULE])
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._async_set(CONF_DND_SCHEDULE, True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._async_set(CONF_DND_SCHEDULE, False)
 
 
 class ReceiverLauncherSwitch(ReceiverEntity, SwitchEntity):

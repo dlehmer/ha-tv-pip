@@ -1308,7 +1308,7 @@ Receiver service health is exposed on the status sensor attributes and diagnosti
 
 Remote receiver health is exposed on the status sensor and Remote Connected binary sensor attributes. Check `remote_connection_attempt_count`, `remote_successful_connection_count`, `remote_message_count`, `remote_last_error`, `remote_last_disconnect_reason`, and the related timestamp fields when debugging external-TV transport. The actual configured external Home Assistant URL remains in redacted diagnostics only; entity attributes expose whether a remote URL is configured, not the URL itself.
 
-The receiver options flow intentionally starts with a compact everyday defaults screen. Advanced popup position, width, height, and remote URL/token fields live behind the Show advanced settings path. Saving the compact screen preserves existing advanced values so routine default changes do not clear remote receiver setup.
+The receiver options flow is a single form. Everyday defaults sit at the top; turning the TV on and do not disturb are expanded sections; door buttons, popup appearance (both shared by all TVs) and advanced settings (position, size, remote URL/token) are collapsed sections. Remote setup is only pushed to the TV when the URL or token changed, so saving with the TV off still works. Cleared optional entity pickers are left out of submitted section data by Home Assistant, so `_merge_option_values` treats those fields as empty when their section is submitted.
 
 When a receiver lacks media text footer support, Home Assistant drops optional title/message footer fields from camera and snapshot commands instead of failing the whole action. This keeps older receivers useful while still surfacing the missing feature in diagnostics.
 

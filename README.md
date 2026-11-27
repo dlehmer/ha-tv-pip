@@ -9,10 +9,14 @@ It is a fork of [HA TV PiP](https://github.com/manix84/ha-tv-pip) by [manix84](h
 ## Quick Start 🚀
 
 1. **Install the integration** in Home Assistant: in HACS, add `https://github.com/dlehmer/ha-tv-pip` as a custom repository (type Integration), install **HA TV PiP Plus**, and restart Home Assistant.
-2. **Prepare each TV** (one time): Settings → System → About → click the build number 7 times, then Settings → System → Developer options → turn on **USB debugging**.
+2. **Prepare each TV** (one time):
+   - **Find its IP address**: Settings → Network & Internet → your Wi-Fi network (or Ethernet) → **IP address** (some TVs: Settings → System → About → Status). Reserving that address for the TV in your router keeps it from changing.
+   - **Turn on developer options**: Settings → System → About (some TVs: Device Preferences → About) → select **Android TV OS build** 7 times until it says you're a developer.
+   - **Turn on USB debugging**: Settings → System → Developer options → **USB debugging** (some TVs call it Network or ADB debugging).
 3. **Add the TV**: Settings → Devices & services → Add integration → **HA TV PiP Plus**. Enter the TV's IP address and tick **Install the HA TV PiP Plus app on this TV first**. Accept the "Allow debugging?" prompt on the TV. Home Assistant installs the app, allows it to show popups over other apps, and pairs with it; type the code the TV shows.
-4. **Pair cameras with doors** (optional): on any TV's **Configure** page, tick **Set up door buttons for cameras**.
-5. **Use it** in automations with the `ha_tv_pip_plus.show_camera` action.
+4. **Set up each TV** (optional): its **Configure** page has everything on one page: door buttons, turning the TV on (on a schedule if you like), do not disturb, popup look, and a **Send a test popup** box.
+5. **Turn the TV on for popups** (optional): at the end of setup Home Assistant asks whether it should turn the TV on when a popup comes in. That uses the TV's **Android TV Remote** integration; if it isn't paired yet, the setup page links to it (enter the same IP address and type the code the TV shows).
+6. **Use it** in automations with the `ha_tv_pip_plus.show_camera` action.
 
 You can turn USB debugging off afterwards; it's only needed again for **Install or update TV app** and **Grant overlay permission** on the TV's device page.
 
@@ -28,7 +32,7 @@ Camera popups can show a button that unlocks a door, opens a garage, or runs a s
 pressed straight from the TV remote:
 
 - Pair cameras with a lock, cover, script, or button once, in any receiver's
-  **Configure** page (**Set up door buttons for cameras**). Pairings apply to every TV.
+  **Configure** page (**Door buttons** section). Pairings apply to every TV.
 - The popup takes remote focus, the button needs two presses to confirm, and the popup
   closes after its duration, on Back, or after the action succeeds.
 - The TV only ever sends back a one-time id, authenticated with its pairing token;
@@ -37,6 +41,15 @@ pressed straight from the TV remote:
 Automations can also pass their own `actions` (or `actions: []` for none). See
 [Door Buttons in the integration README](custom_components/ha_tv_pip/README.md#door-buttons-)
 for the full setup and a YAML example.
+
+## Do Not Disturb and Turning TVs On 🔕📺
+
+Each TV can have its own do not disturb, set in Home Assistant: a switch, a control
+entity of your choice (on or off, your pick), or scheduled hours. Each TV can also turn
+itself on for popups never, always, or only between set times, and show a still from
+the moment of the ring (optionally zoomed in) while a slow TV wakes up. See
+[the integration README](custom_components/ha_tv_pip_plus/README.md#do-not-disturb-)
+for details.
 
 ## Installing the Original Way 🧰
 

@@ -12,7 +12,6 @@ from .adb_setup import (
 )
 from .client import (
     ReceiverClientError,
-    ShowCameraCommand,
     async_open_receiver,
 )
 from .const import CONF_DEVICE_ID, CONF_NAME, CONF_TOKEN
@@ -22,9 +21,9 @@ from .remote_setup import async_sync_remote_setup, has_remote_setup_options
 from .services import (
     _async_close_receiver_command,
     _async_get_receiver_status_command,
-    _async_send_receiver_command,
     _prefer_remote_transport,
     _resolve_receiver_from_entry,
+    async_send_test_popup,
     store_last_command_result,
 )
 
@@ -61,7 +60,6 @@ else:
             """Fallback Home Assistant error for unit tests."""
 
 
-TEST_STREAM_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
 
 
 async def async_setup_entry(hass: Any, entry: Any, async_add_entities: Any) -> None:
@@ -279,25 +277,10 @@ class ReceiverTestButton(ReceiverEntity, ButtonEntity):
         self.hass = hass
 
     async def async_press(self) -> None:
-        """Send a short test stream command."""
+        """Send a short test stream to this TV."""
 
-        command = ShowCameraCommand(
-            title="HA TV PiP Plus Test",
-            url=TEST_STREAM_URL,
-            duration_seconds=15,
-            enter_pip=True,
-            stream_type="hls",
-        )
-        receiver = _resolve_receiver_from_entry(self.entry)
-        remote = remote_registry(self.hass)
-        prefer_remote = _prefer_remote_transport(receiver, remote)
         try:
-            transport = await _async_send_receiver_command(
-                receiver,
-                remote,
-                command=command,
-                prefer_remote=prefer_remote,
-            )
+            transport = await async_send_test_popup(self.hass, self.entry)
         except ReceiverClientError as error:
             _store_button_result(
                 self.hass,
@@ -306,7 +289,7 @@ class ReceiverTestButton(ReceiverEntity, ButtonEntity):
                 status="failed",
                 reason="receiver_command_failed",
                 detail=str(error),
-                final_stream_type=command.stream_type,
+                final_stream_type="hls",
             )
             raise HomeAssistantError(f"Could not send test PiP: {error}") from error
         _store_button_result(
@@ -315,7 +298,7 @@ class ReceiverTestButton(ReceiverEntity, ButtonEntity):
             command_type="test_pip",
             status="accepted",
             transport=transport,
-            final_stream_type=command.stream_type,
+            final_stream_type="hls",
         )
 
 

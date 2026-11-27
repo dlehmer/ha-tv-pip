@@ -148,7 +148,7 @@ If the launcher icon is hidden, use the Open Launcher button or Android Settings
 Remote receiver mode:
 
 - Configure from the integration options flow.
-- The first options screen keeps everyday defaults compact; use Show advanced settings for popup position, width, height, and remote URL/token fields.
+- Everything is on one **Configure** page; popup position, width, height, and remote URL/token fields are in its collapsed **Advanced** section. Saving only contacts the TV when the remote URL or token changed.
 - Uses your own Home Assistant external URL and long-lived access token.
 - The TV connects outbound to Home Assistant, so you do not need to forward ports to the TV.
 - Local HTTP is used first by default. Prefer Remote Transport can be enabled when connected remote receivers should receive commands over the Home Assistant WebSocket path first.
@@ -538,12 +538,12 @@ Under **Settings → Updates** you'll find:
   version is kept in `.ha_tv_pip_plus_backup` in your config folder). Restart Home
   Assistant when the Repairs notice asks.
 - **TV app** (one per TV): press **Install** to update the app over network ADB (USB
-  debugging on). With **Update TV apps automatically** on (the default, in **Customize
-  popups, buttons and updates**), TVs update themselves within an hour of a new release.
+  debugging on). With **Update TV apps automatically** on (the default, in the **Popups,
+  buttons and updates** section), TVs update themselves within an hour of a new release.
 
 ## Popup Timing and Playback ⏱️
 
-In **Customize popups, buttons and updates**:
+In the **Popups, buttons and updates (all TVs)** section of the **Configure** page:
 
 - **How long popups stay up** (default 30 s) applies unless an automation sets
   `duration_seconds` or the TV has its own default duration.
@@ -555,12 +555,99 @@ In **Customize popups, buttons and updates**:
 
 ## Turning TVs On for Popups 📺
 
-On a TV's **Configure** page, set **TV power entity** to something that switches that
-TV on and off, such as its Android TV Remote `remote.*` or `media_player.*` entity. If
-the TV is off when a popup comes in, Home Assistant turns it on, shows the popup, and
-turns it back off once the popup is gone. A TV that was already on stays on, and so does
-one that someone starts using while the popup is up. Google Cast entities can't report
-whether the TV itself is on, so use the Android TV Remote integration for this.
+In the **Turning this TV on** section of a TV's **Configure** page, set **TV power
+entity** to something that switches that TV on and off, such as its Android TV Remote
+`remote.*` or `media_player.*` entity. If the TV is off when a popup comes in, Home
+Assistant turns it on, shows the popup, and turns it back off once the popup is gone. A
+TV that was already on stays on, and so does one that someone starts using while the
+popup is up. Google Cast entities can't report whether the TV itself is on, so use the
+Android TV Remote integration for this.
+
+**Turn the TV on for popups** is set per TV: **Never**, **Always**, or **On a schedule**
+(only between two times; a window like 22:00 to 07:00 runs past midnight). Each TV also
+has a **Turn TV on for popups** select and **Turn TV on from / until** time entities, so
+dashboards and automations can change it.
+
+### Getting a power entity: Android TV Remote
+
+1. Settings → Devices & services → **Add integration** → **Android TV Remote**.
+2. Enter the TV's IP address (the same one HA TV PiP Plus uses).
+3. A code appears on the TV; type it into Home Assistant.
+4. Pick the new `remote.*` (or `media_player.*`) entity as this TV's **TV power entity**.
+
+On the TV, turn on any "quick start", "network standby" or "wake on network" setting so
+the TV can be woken over Wi-Fi or Ethernet.
+
+### A still first, for TVs that wake slowly 🖼️
+
+Some TVs take a long time after turning on before live video shows. **If the TV has to be
+turned on, show** can be:
+
+- **Live video** (default).
+- **A still from the moment it was triggered, then live video**: Home Assistant grabs a
+  picture from the camera *before* it starts waking the TV, the popup shows it straight
+  away, and live video takes over once the stream starts.
+- **Only a still from the moment it was triggered**.
+
+**Zoom in on the still** (1× to 4×) and **Zoom toward** (for example the top middle,
+where faces usually are on a doorbell) crop the still so a face is easier to make out.
+Only the still is zoomed; live video shows the whole picture. If the camera's saved
+defaults name a separate `snapshot_camera_entity` (a higher-resolution or person-crop
+camera, such as one from Frigate), the still comes from that.
+
+**Use the camera's own event picture**: some camera integrations add an `image` entity
+with their own picture of each event (Eufy's "Last event image", for example), which
+the camera may centre on the person. With this on, if the camera has such a picture and
+it changed in the last 30 seconds (Home Assistant waits up to 4 seconds for it), that
+picture is shown as-is, without zoom or flattening. Otherwise the normal still is used.
+
+**Fisheye cameras to flatten**: doorbells with a 180° lens send a round picture. Pick
+those cameras here and their still is flattened into a normal, straight-lined picture
+before it's shown; **Zoom** then narrows the view (1× shows about 110° of the scene) and
+**Zoom toward** aims it (top, bottom, left, right). Tick **Send a test popup** and the
+test shows the flattened still of the first fisheye camera instead of the test video, so
+you can tune zoom and aim. How sharp it looks depends on the camera's snapshot: many
+battery doorbells only send a small (for example 720×720), heavily compressed picture.
+
+Stills are kept in memory for 15 minutes behind a random, single-purpose URL. They are
+only used when Home Assistant turned the TV on; a TV that was already on gets live video.
+
+## Do Not Disturb 🔕
+
+Each TV has its own do not disturb, set in Home Assistant (never on the TV). While it's
+on, `show_camera`, `show_snapshot` and `show_notification` skip that TV, and its
+**Last Command Result** says `skipped` with the reason. Do not disturb is on when any of
+these is true:
+
+- The TV's **Do not disturb** switch is on.
+- A **control entity** you pick (an input boolean, switch, binary sensor, anything with
+  an on/off state) is in the state you choose: **Do not disturb when the control entity
+  is** On or Off.
+- **Do not disturb schedule** is on and it's between **Do not disturb starts** and
+  **Do not disturb ends**.
+
+All of these are on the **Configure** page and are also entities on the TV's device
+(switches, time entities and a select). **Do not disturb active** is a binary sensor
+that shows whether popups are being held back right now, and why.
+
+For things that must get through, such as a doorbell at night, add
+`ignore_do_not_disturb: true` to the action:
+
+```yaml
+action: ha_tv_pip_plus.show_camera
+target:
+  device_id: <your TV>
+data:
+  camera_entity: camera.front_door
+  ignore_do_not_disturb: true
+```
+
+## Testing a TV 🧪
+
+Tick **Send a test popup to this TV after saving** at the bottom of the **Configure**
+page, or press the TV's **Test PiP** button. A 15-second test video pops up. Do not
+disturb is ignored for the test; the TV is turned on only if its turn-on setting allows
+it right now.
 
 ## Known Limitations 🚧
 

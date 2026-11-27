@@ -10,7 +10,8 @@
       "invalid_code": "Wpisz sześciocyfrowy kod parowania widoczny na telewizorze.",
       "invalid_host": "Wpisz adres IP lub nazwę hosta odbiornika Android TV.",
       "invalid_port": "Wpisz prawidłowy port od 1 do 65535.",
-      "pairing_not_started": "Uruchom parowanie ponownie i wpisz nowy kod widoczny na telewizorze."
+      "pairing_not_started": "Uruchom parowanie ponownie i wpisz nowy kod widoczny na telewizorze.",
+      "power_entity_required": "Pick the TV's power entity, or choose Never. Pair the TV's Android TV Remote first if it isn't in the list."
     },
     "step": {
       "confirm": {
@@ -34,40 +35,148 @@
         },
         "description": "Użyj konfiguracji ręcznej, jeśli Home Assistant nie wykrył automatycznie odbiornika Android TV.",
         "title": "Dodaj odbiornik HA TV PiP Plus"
+      },
+      "turn_tv_on": {
+        "title": "Turn this TV on for popups?",
+        "description": "Home Assistant can turn {name} on when a popup comes in and back off afterwards. To do that it needs the TV's Android TV Remote in Home Assistant.\n\n{found}\n\n**To pair the Android TV Remote** (one time, about a minute):\n1. Open [Add Android TV Remote]({pair_remote_url}) in a new tab (or Settings > Devices & services > Add integration > Android TV Remote).\n2. Enter this TV's IP address: {host}.\n3. Type the code that appears on the TV.\n4. Come back here and pick the new remote entity below.\n\nOn the TV, also turn on any quick start, network standby or wake on network setting so it can be woken over the network. You can change all of this later on the TV's Configure page, including turning it on only during set hours.",
+        "data": {
+          "wake_tv": "Turn the TV on for popups",
+          "power_entity": "TV power entity (its Android TV Remote)"
+        },
+        "data_description": {
+          "wake_tv": "Choose Never if you don't want this, or want to set it up later.",
+          "power_entity": "The remote or media player from the Android TV Remote integration for this TV."
+        }
       }
     }
   },
   "options": {
     "error": {
       "cannot_connect": "Nie można wysłać ustawień odbiornika zdalnego do odbiornika Android TV. Sprawdź, czy telewizor jest online i sparowany.",
-      "remote_fields_required": "Wpisz zewnętrzny adres URL Home Assistant oraz token dostępu albo pozostaw oba pola puste, aby wyłączyć tryb odbiornika zdalnego.",
       "invalid_default_duration": "Default duration must be 0 or between 1 and 3600 seconds.",
       "invalid_default_overlay_size": "Default width and height must be 0 or within the supported overlay size range.",
       "invalid_default_position": "Choose a supported popup position.",
-      "invalid_default_stream_type": "Choose a supported stream strategy."
+      "invalid_default_stream_type": "Choose a supported stream strategy.",
+      "remote_fields_required": "Wpisz zewnętrzny adres URL Home Assistant oraz token dostępu albo pozostaw oba pola puste, aby wyłączyć tryb odbiornika zdalnego.",
+      "camera_button_incomplete": "Each row needs both a camera and the lock, cover, script, or button it controls.",
+      "camera_button_duplicate": "Each camera can only have one button.",
+      "camera_button_label_too_long": "Button labels can be at most 40 characters."
     },
     "step": {
       "init": {
+        "title": "TV settings",
+        "description": "Everything for this TV on one page. The sections for door buttons and popup look are shared by all your TVs. Tick \"Send a test popup\" at the bottom to try your settings as soon as you save.",
         "data": {
+          "default_stream_type": "Preferred stream strategy",
           "default_duration_seconds": "Default duration",
           "default_snapshot_fallback": "Snapshot fallback by default",
-          "default_stream_type": "Preferred stream strategy",
           "prefer_remote_transport": "Preferuj transport zdalny",
-          "show_advanced_options": "Pokaż ustawienia zaawansowane"
+          "send_test_popup": "Send a test popup to this TV after saving"
         },
-        "description": "Set everyday receiver defaults. Advanced popup size, position, and remote receiver credentials are hidden unless needed.",
-        "title": "Receiver defaults"
-      },
-      "advanced": {
-        "data": {
-          "default_height": "Default height",
-          "default_position": "Default position",
-          "default_width": "Default width",
-          "remote_access_token": "Długoterminowy token dostępu Home Assistant",
-          "remote_home_assistant_url": "Zewnętrzny adres URL Home Assistant"
+        "data_description": {
+          "send_test_popup": "A 15-second test video pops up right after you save. Do not disturb is ignored for the test, and the TV is turned on only if your turn-on setting allows it right now."
         },
-        "description": "Set advanced popup defaults and optional remote receiver settings. Use 0 for width or height to keep the built-in service default. Remote receiver settings are sent to the paired TV over the local connection. Suggested external URL: {suggested_url}",
-        "title": "Advanced receiver setup"
+        "sections": {
+          "turn_tv_on": {
+            "name": "Turning this TV on",
+            "description": "Home Assistant can switch this TV on when a popup comes in and back off once the popup is gone. This needs an entity that powers the TV, such as its Android TV Remote entity.",
+            "data": {
+              "power_entity": "TV power entity",
+              "wake_tv": "Turn the TV on for popups",
+              "wake_tv_start": "Only turn it on from",
+              "wake_tv_end": "Only turn it on until",
+              "woken_tv_view": "If the TV has to be turned on, show",
+              "still_zoom": "Zoom in on the still",
+              "still_focus": "Zoom toward",
+              "still_fisheye_cameras": "Fisheye cameras to flatten",
+              "still_use_event_image": "Use the camera's own event picture when it has one"
+            },
+            "data_description": {
+              "power_entity": "A media player or remote that switches this TV on and off. Leave empty to never turn the TV on.",
+              "wake_tv": "Never: popups only show if the TV is already on. Always: turn it on any time. On a schedule: only between the two times below.",
+              "wake_tv_start": "Used when \"On a schedule\" is chosen. If the end is earlier than the start, the window runs past midnight.",
+              "wake_tv_end": "Used when \"On a schedule\" is chosen.",
+              "woken_tv_view": "Some TVs take a while after turning on before live video shows. A still grabbed right away shows who was at the door the moment the popup was triggered. Only used when this TV was off and Home Assistant turned it on.",
+              "still_zoom": "1× shows the whole picture. Zoom in to make a face easier to see; the live video is never zoomed.",
+              "still_focus": "The part of the picture to zoom into. On most doorbells, faces are in the top middle.",
+              "still_fisheye_cameras": "Cameras with a round, fisheye picture (common on doorbells). Their still is flattened into a normal picture; zoom and aim then choose which part of the scene to show. Tick \"Send a test popup\" to see the result on this TV.",
+              "still_use_event_image": "Some cameras (Eufy, for example) save their own picture of each event, often centred on the person. When it was updated around the time of the popup, it's shown as-is instead of the still below, without zoom or flattening. Otherwise the normal still is used."
+            }
+          },
+          "do_not_disturb_settings": {
+            "name": "Do not disturb",
+            "description": "While do not disturb is on, popups to this TV are skipped (automations can still get through with ignore_do_not_disturb: true). It's on when the switch below is on, when the control entity is in the state you choose, or during the scheduled hours.",
+            "data": {
+              "do_not_disturb": "Do not disturb now",
+              "do_not_disturb_entity": "Control entity (optional)",
+              "do_not_disturb_entity_state": "Do not disturb when the control entity is",
+              "do_not_disturb_schedule": "Use do-not-disturb hours",
+              "do_not_disturb_start": "Do not disturb from",
+              "do_not_disturb_end": "Do not disturb until"
+            },
+            "data_description": {
+              "do_not_disturb": "Same as this TV's Do not disturb switch entity.",
+              "do_not_disturb_entity": "Any entity you already use, such as an input boolean, switch or binary sensor. Leave empty to not use one.",
+              "do_not_disturb_end": "If the end is earlier than the start, the hours run past midnight (for example 22:00 to 07:00)."
+            }
+          },
+          "camera_buttons": {
+            "name": "Door buttons (all TVs)",
+            "description": "Pair a camera with the lock, garage door, script, or button it should control. Whenever that camera pops up on a TV, the popup gets one button for it: locks unlock, covers open, and scripts or buttons run. The popup takes remote focus, and the button needs two presses. These pairings are shared by all your TVs. Leave a row empty to remove it. Tip: point the button at a script if you want extra safety checks before it runs.",
+            "data": {
+              "camera_1": "Camera 1",
+              "button_target_1": "Lock, cover, script or button for camera 1",
+              "button_label_1": "Button label for camera 1 (optional)",
+              "camera_2": "Camera 2",
+              "button_target_2": "Lock, cover, script or button for camera 2",
+              "button_label_2": "Button label for camera 2 (optional)",
+              "camera_3": "Camera 3",
+              "button_target_3": "Lock, cover, script or button for camera 3",
+              "button_label_3": "Button label for camera 3 (optional)",
+              "camera_4": "Camera 4",
+              "button_target_4": "Lock, cover, script or button for camera 4",
+              "button_label_4": "Button label for camera 4 (optional)"
+            }
+          },
+          "appearance": {
+            "name": "Popups, buttons and updates (all TVs)",
+            "description": "Settings shared by every TV. Changes apply to the next popup; no app update needed. Automations can still set popup text or duration per popup.\n\nPopup duration applies unless an automation or the TV's own default duration sets one. Width and height of 0 use the built-in size (640 × 360). Button defaults match Home Assistant's dashboard tiles. Pausing works with most streaming apps (they pause and resume); some live-TV apps may ignore it.",
+            "data": {
+              "text_mode": "Text",
+              "title_size": "Title size",
+              "title_color": "Title color",
+              "message_size": "Message size",
+              "message_color": "Message color",
+              "background_color": "Text background color",
+              "background_opacity": "Text background opacity",
+              "width": "Popup width (0 = default)",
+              "height": "Popup height (0 = default)",
+              "button_shape": "Button shape",
+              "button_background_color": "Button color",
+              "button_background_opacity": "Button opacity",
+              "button_text_color": "Button text color",
+              "button_accent_color": "Button highlight color (selected button and icon)",
+              "button_text_size": "Button text size",
+              "button_corner_radius": "Button corner roundness",
+              "button_show_icon": "Show button icons",
+              "popup_duration": "How long popups stay up",
+              "unlocked_stay_minutes": "After unlocking or opening, stay up until secured, for at most",
+              "media_behavior": "When a popup appears, what's playing on the TV should",
+              "auto_update_tv_apps": "Update TV apps automatically (needs USB debugging on the TV)"
+            }
+          },
+          "advanced": {
+            "name": "Advanced receiver setup",
+            "description": "Set advanced popup defaults and optional remote receiver settings. Use 0 for width or height to keep the built-in service default. Remote receiver settings are sent to the paired TV over the local connection. Suggested external URL: {suggested_url}",
+            "data": {
+              "default_height": "Default height",
+              "default_position": "Default position",
+              "default_width": "Default width",
+              "remote_access_token": "Długoterminowy token dostępu Home Assistant",
+              "remote_home_assistant_url": "Zewnętrzny adres URL Home Assistant"
+            }
+          }
+        }
       }
     }
   },
@@ -81,6 +190,12 @@
       },
       "remote_connected": {
         "name": "Remote Connected"
+      },
+      "overlay_permission": {
+        "name": "Overlay permission"
+      },
+      "do_not_disturb_active": {
+        "name": "Do not disturb active"
       }
     },
     "button": {
@@ -98,6 +213,12 @@
       },
       "refresh_status": {
         "name": "Refresh Status"
+      },
+      "grant_overlay_permission": {
+        "name": "Grant overlay permission"
+      },
+      "install_tv_app": {
+        "name": "Install or update TV app"
       }
     },
     "sensor": {
@@ -130,11 +251,64 @@
       },
       "restreaming_provider_status": {
         "name": "Restreaming Provider Status"
+      },
+      "saved_camera_defaults": {
+        "name": "Saved Camera Defaults"
       }
     },
     "switch": {
       "hide_launcher": {
         "name": "Ukryj launcher"
+      },
+      "do_not_disturb": {
+        "name": "Do not disturb"
+      },
+      "do_not_disturb_schedule": {
+        "name": "Do not disturb schedule"
+      }
+    },
+    "update": {
+      "tv_app": {
+        "name": "TV app"
+      }
+    },
+    "time": {
+      "do_not_disturb_start": {
+        "name": "Do not disturb starts"
+      },
+      "do_not_disturb_end": {
+        "name": "Do not disturb ends"
+      },
+      "wake_tv_start": {
+        "name": "Turn TV on from"
+      },
+      "wake_tv_end": {
+        "name": "Turn TV on until"
+      }
+    },
+    "select": {
+      "wake_tv": {
+        "name": "Turn TV on for popups",
+        "state": {
+          "never": "Never",
+          "always": "Always",
+          "scheduled": "On a schedule"
+        }
+      },
+      "do_not_disturb_entity_state": {
+        "name": "Do not disturb when control entity is",
+        "state": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "woken_tv_view": {
+        "name": "When the TV is turned on, show",
+        "state": {
+          "live": "Live video",
+          "still_then_live": "Still, then live video",
+          "still": "Only a still"
+        }
       }
     }
   },
@@ -202,6 +376,10 @@
         },
         "text_overlay": {
           "name": "Tekst na multimediach"
+        },
+        "ignore_do_not_disturb": {
+          "name": "Ignore do not disturb",
+          "description": "Show this popup even if the TV is in do not disturb. Use it for things that must get through, like a doorbell or an alarm."
         }
       }
     },
@@ -250,6 +428,10 @@
         },
         "text_overlay": {
           "name": "Tekst na multimediach"
+        },
+        "ignore_do_not_disturb": {
+          "name": "Ignore do not disturb",
+          "description": "Show this popup even if the TV is in do not disturb. Use it for things that must get through, like a doorbell or an alarm."
         }
       }
     },
@@ -292,6 +474,10 @@
         },
         "height": {
           "name": "Height"
+        },
+        "ignore_do_not_disturb": {
+          "name": "Ignore do not disturb",
+          "description": "Show this popup even if the TV is in do not disturb. Use it for things that must get through, like a doorbell or an alarm."
         }
       }
     },
@@ -547,6 +733,68 @@
     "receiver_version_mismatch": {
       "title": "Niezgodna wersja odbiornika HA TV PiP Plus",
       "description": "{receiver} używa wersji odbiornika Android {receiver_version}, ale integracja Home Assistant ma wersję {integration_version}. Zainstaluj APK Androida i integrację Home Assistant z tego samego wydania GitHub Release przed diagnozowaniem problemów z odtwarzaniem, parowaniem lub odbiornikiem zdalnym."
+    }
+  },
+  "selector": {
+    "text_mode": {
+      "options": {
+        "none": "No text",
+        "over_video": "Over the video",
+        "below_video": "Below the video"
+      }
+    },
+    "button_shape": {
+      "options": {
+        "tile": "Tile (like Home Assistant dashboards)",
+        "pill": "Pill",
+        "square": "Square"
+      }
+    },
+    "media_behavior": {
+      "options": {
+        "none": "Keep playing",
+        "pause": "Pause, then resume after the popup",
+        "duck": "Keep playing, with the volume lowered"
+      }
+    },
+    "wake_tv": {
+      "options": {
+        "never": "Never",
+        "always": "Always",
+        "scheduled": "On a schedule"
+      }
+    },
+    "do_not_disturb_entity_state": {
+      "options": {
+        "on": "On",
+        "off": "Off"
+      }
+    },
+    "woken_tv_view": {
+      "options": {
+        "live": "Live video (default)",
+        "still_then_live": "A still from the moment it was triggered, then live video",
+        "still": "Only a still from the moment it was triggered"
+      }
+    },
+    "still_focus": {
+      "options": {
+        "top_left": "Top left",
+        "top": "Top middle",
+        "top_right": "Top right",
+        "left": "Middle left",
+        "center": "Center",
+        "right": "Middle right",
+        "bottom_left": "Bottom left",
+        "bottom": "Bottom middle",
+        "bottom_right": "Bottom right"
+      }
+    },
+    "wake_tv_setup": {
+      "options": {
+        "never": "Never (or set it up later)",
+        "always": "Yes, whenever a popup comes in"
+      }
     }
   }
 }

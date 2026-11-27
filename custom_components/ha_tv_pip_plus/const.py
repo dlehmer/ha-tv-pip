@@ -21,9 +21,6 @@ CONF_REMOTE_ACCESS_TOKEN = "remote_access_token"
 CONF_REMOTE_HOME_ASSISTANT_URL = "remote_home_assistant_url"
 CONF_PREFER_REMOTE_TRANSPORT = "prefer_remote_transport"
 CONF_POWER_ENTITY = "power_entity"
-CONF_SHOW_ADVANCED_OPTIONS = "show_advanced_options"
-CONF_EDIT_CAMERA_BUTTONS = "edit_camera_buttons"
-CONF_EDIT_POPUP_APPEARANCE = "edit_popup_appearance"
 CONF_TOKEN = "token"
 CONF_VERSION = "version"
 SENSOR_DOMAIN = "sensor"
@@ -63,5 +60,7 @@ PLATFORMS = [
     BINARY_SENSOR_DOMAIN,
     BUTTON_DOMAIN,
     SWITCH_DOMAIN,
+    "select",
+    "time",
     "update",
 ]

@@ -15,6 +15,7 @@ from .actions import (
     ATTR_ACTIONS,
     DEFAULT_ACTION_TTL_SECONDS,
     actions_schema,
+    camera_buttons,
     default_action_spec,
     pending_action_store,
 )
@@ -67,10 +68,22 @@ from .const import (
 from .power import (
     async_power_off_after_popup,
     async_power_on_for_popup,
+    is_off,
     power_entity_for,
 )
 from .remote import remote_registry
 from .restreaming import restreaming_provider_metadata
+from .schedule import dnd_reason, may_wake_tv
+from .stills import (
+    CONF_STILL_EVENT_IMAGE,
+    CONF_STILL_FISHEYE_CAMERAS,
+    CONF_WOKEN_TV_VIEW,
+    VIEW_LIVE,
+    VIEW_STILL,
+    async_capture_still,
+    event_image_entity_for,
+    still_options,
+)
 
 if TYPE_CHECKING:
 
@@ -99,6 +112,7 @@ ATTR_ENTITY_ID = "entity_id"
 ATTR_FLOOR_ID = "floor_id"
 ATTR_BACKGROUND_COLOR = "background_color"
 ATTR_HEIGHT = "height"
+ATTR_IGNORE_DND = "ignore_do_not_disturb"
 ATTR_LABEL_ID = "label_id"
 ATTR_MESSAGE = "message"
 ATTR_MESSAGE_COLOR = "message_color"
@@ -330,6 +344,7 @@ async def async_register_services(hass: Any) -> None:
 
     overlay_actions_field = {
         vol.Optional(ATTR_ACTIONS): actions_schema(vol, cv),
+        vol.Optional(ATTR_IGNORE_DND, default=False): bool,
     }
 
     camera_schema = vol.Schema(
@@ -646,6 +661,8 @@ async def async_handle_show_camera(hass: Any, call: Any) -> None:
     if request.stream_camera_entity is not None:
         _validate_camera_entity(hass, request.stream_camera_entity)
     receiver = _resolve_receiver(hass, request)
+    if _skipped_for_do_not_disturb(hass, call, receiver, SERVICE_SHOW_CAMERA):
+        return
     request = _apply_camera_defaults(request, receiver, duration_fallback=30)
     request = _with_popup_appearance(hass, request, call, receiver)
     title = request.title or _camera_title(hass, request.camera_entity)
@@ -704,6 +721,9 @@ async def async_handle_show_camera(hass: Any, call: Any) -> None:
     )
 
     try:
+        command = await _async_still_for_woken_tv(
+            hass, receiver, request, command, prefer_external, capabilities
+        )
         command = _with_overlay_actions(
             hass, call, receiver, command, prefer_external=prefer_external
         )
@@ -756,6 +776,8 @@ async def async_handle_show_snapshot(hass: Any, call: Any) -> None:
     request = _request_from_call(call)
     _validate_camera_entity(hass, request.camera_entity)
     receiver = _resolve_receiver(hass, request)
+    if _skipped_for_do_not_disturb(hass, call, receiver, SERVICE_SHOW_SNAPSHOT):
+        return
     request = _apply_camera_defaults(request, receiver, duration_fallback=10)
     request = _with_popup_appearance(hass, request, call, receiver)
     remote = remote_registry(hass)
@@ -819,6 +841,9 @@ async def async_handle_show_snapshot(hass: Any, call: Any) -> None:
             stream_type=STREAM_TYPE_SNAPSHOT,
             **_presentation_payload(request),
         )
+        command = await _async_still_for_woken_tv(
+            hass, receiver, request, command, prefer_external, capabilities
+        )
         command = _with_overlay_actions(
             hass, call, receiver, command, prefer_external=prefer_external
         )
@@ -870,6 +895,8 @@ async def async_handle_show_notification(hass: Any, call: Any) -> None:
 
     request = _notification_request_from_call(call)
     receiver = _resolve_receiver(hass, request)
+    if _skipped_for_do_not_disturb(hass, call, receiver, SERVICE_SHOW_NOTIFICATION):
+        return
     request = _apply_notification_defaults(request, receiver)
     remote = remote_registry(hass)
     prefer_external = _prefer_remote_transport(receiver, remote)
@@ -1531,6 +1558,153 @@ def _with_popup_appearance(
     )
 
 
+TEST_STREAM_URL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+
+
+async def async_send_test_popup(hass: Any, entry: Any) -> str:
+    """Send a 15-second test video popup to one TV. Returns the transport used.
+
+    Do not disturb is ignored (a test is always on purpose), but the TV is only
+    turned on if its turn-on setting allows it right now, so the test shows
+    exactly what a real popup would do with the TV.
+
+    If the TV has fisheye cameras set for stills, the test shows the flattened
+    still of the first one instead, so zoom and aim can be tuned.
+    """
+
+    receiver = _resolve_receiver_from_entry(entry)
+    remote = remote_registry(hass)
+    prefer_remote = _prefer_remote_transport(receiver, remote)
+    command = await _async_test_command(hass, receiver, prefer_remote)
+    woke_tv = await _async_wake_tv_for_popup(hass, receiver)
+    transport = await _async_send_receiver_command(
+        receiver,
+        remote,
+        command=command,
+        prefer_remote=prefer_remote,
+    )
+    _schedule_tv_power_off(
+        hass, receiver, remote, command, woke_tv, prefer_remote=prefer_remote
+    )
+    return transport
+
+
+async def _async_still_for_woken_tv(
+    hass: Any,
+    receiver: ReceiverEntry,
+    request: ShowCameraRequest,
+    command: ShowCameraCommand,
+    prefer_external: bool,
+    capabilities: ReceiverCapabilities | None,
+) -> ShowCameraCommand:
+    """Use a still from right now if the TV has to be turned on first (stills.py).
+
+    The still is grabbed before the TV starts waking, so it shows the moment the
+    popup was triggered even if the TV takes a while to come on.
+    """
+
+    view = still_options(receiver.options)[CONF_WOKEN_TV_VIEW]
+    if view == VIEW_LIVE:
+        return command
+    entity_id = power_entity_for(receiver.options)
+    states = getattr(hass, "states", None)
+    if entity_id is None or states is None or not may_wake_tv(receiver.options):
+        return command
+    if not is_off(states.get(entity_id)):
+        return command
+    snapshot_entity = request.snapshot_camera_entity or request.camera_entity
+    path = await async_capture_still(hass, snapshot_entity, receiver.options)
+    if path is None:
+        return command
+    still_url = _absolute_stream_url(hass, path, prefer_external=prefer_external)
+    can_show_snapshot = capabilities is None or _supports_stream(
+        capabilities, STREAM_TYPE_SNAPSHOT
+    )
+    if (
+        view == VIEW_STILL or command.stream_type == STREAM_TYPE_SNAPSHOT
+    ) and can_show_snapshot:
+        return replace(
+            command,
+            url=still_url,
+            stream_type=STREAM_TYPE_SNAPSHOT,
+            preview_url=None,
+            fallback_url=None,
+            fallback_stream_type=None,
+        )
+    return replace(command, preview_url=still_url)
+
+
+def _test_still_camera(hass: Any, receiver: ReceiverEntry) -> str | None:
+    """The camera whose still the test popup should preview, if any.
+
+    A fisheye camera set for flattening, or else (when the event picture is
+    turned on) the first door-button camera that has one.
+    """
+
+    settings = still_options(receiver.options)
+    if settings[CONF_STILL_FISHEYE_CAMERAS]:
+        return str(settings[CONF_STILL_FISHEYE_CAMERAS][0])
+    if settings[CONF_STILL_EVENT_IMAGE]:
+        for camera in camera_buttons(hass) or {}:
+            if event_image_entity_for(hass, camera) is not None:
+                return str(camera)
+    return None
+
+
+async def _async_test_command(
+    hass: Any, receiver: ReceiverEntry, prefer_remote: bool
+) -> ShowCameraCommand:
+    camera = _test_still_camera(hass, receiver)
+    if camera is not None:
+        path = await async_capture_still(
+            hass, camera, receiver.options, fresh_only=False
+        )
+        if path is not None:
+            return ShowCameraCommand(
+                title=f"Still preview: {_camera_title(hass, camera)}",
+                url=_absolute_stream_url(hass, path, prefer_external=prefer_remote),
+                duration_seconds=20,
+                enter_pip=True,
+                stream_type=STREAM_TYPE_SNAPSHOT,
+            )
+    return ShowCameraCommand(
+        title="HA TV PiP Plus Test",
+        url=TEST_STREAM_URL,
+        duration_seconds=15,
+        enter_pip=True,
+        stream_type="hls",
+    )
+
+
+def _skipped_for_do_not_disturb(
+    hass: Any, call: Any, receiver: ReceiverEntry, command_type: str
+) -> bool:
+    """Skip a popup while this TV is in do not disturb (unless told to ignore it)."""
+
+    if bool(dict(getattr(call, "data", {})).get(ATTR_IGNORE_DND, False)):
+        return False
+    reason = dnd_reason(receiver.options, hass=hass)
+    if reason is None:
+        return False
+    _LOGGER.info(
+        "Skipped a popup on %s: do not disturb is on (%s)", receiver.name, reason
+    )
+    _store_command_result(
+        hass,
+        receiver,
+        {
+            "command_type": command_type,
+            "receiver": receiver.name,
+            "receiver_device_id": receiver.device_id,
+            "status": "skipped",
+            "stage": "do_not_disturb",
+            "reason": f"do_not_disturb_{reason}",
+            "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        },
+    )
+    return True
+
+
 async def _async_wake_tv_for_popup(
     hass: Any, receiver: ReceiverEntry
 ) -> tuple[str, tuple[Any, ...]] | None:
@@ -1538,6 +1712,12 @@ async def _async_wake_tv_for_popup(
 
     entity_id = power_entity_for(receiver.options)
     if entity_id is None or getattr(hass, "states", None) is None:
+        return None
+    if not may_wake_tv(receiver.options):
+        _LOGGER.debug(
+            "Not turning on %s for a popup: outside its turn-on schedule",
+            receiver.name,
+        )
         return None
     activity = await async_power_on_for_popup(hass, entity_id)
     return (entity_id, activity) if activity is not None else None
