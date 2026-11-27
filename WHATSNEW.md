@@ -1,5 +1,9 @@
 # What's New ✨
 
+## 1.38.4 - Cameras Stay Together 📹
+
+- Camera popups always use the overlay when the TV allows it, so a burst of cameras can't close the others 🐛
+
 ## 1.38.3 - Easier Picking Between Cameras 🎯
 
 - Up to four cameras at once, tiled two by two 🔲
