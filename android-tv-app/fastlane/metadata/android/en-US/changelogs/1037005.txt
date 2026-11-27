@@ -1,0 +1,1 @@
+- TV app updates no longer get stuck on "installing" after Home Assistant starts 🔄

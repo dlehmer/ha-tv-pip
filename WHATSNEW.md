@@ -1,5 +1,9 @@
 # What's New ✨
 
+## 1.37.5 - TV App Updates Fixed 📺
+
+- TV app updates no longer get stuck on "installing" after Home Assistant starts 🔄
+
 ## 1.37.4 - Stability Fixes 🔧
 
 - Do not disturb sensor updates safely when its control entity changes 🛠️

@@ -70,3 +70,39 @@ def test_install_rejects_unsafe_paths(tmp_path: Path) -> None:
     )
     with pytest.raises(Exception, match="unsafe"):
         install_integration_zip(data, target, tmp_path / "s", tmp_path / "b")
+
+
+def test_auto_install_waits_until_the_entity_is_added(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+    import types
+
+    import custom_components.ha_tv_pip_plus.update as update
+
+    installs: list[str] = []
+    entry = types.SimpleNamespace(
+        data={"device_id": "d", "host": "h", "port": 1, "name": "TV"},
+        options={},
+        entry_id="e",
+    )
+    entity = update.ReceiverAppUpdate(types.SimpleNamespace(data={}), entry)
+
+    async def fake_install(version: str | None, backup: bool, **kwargs: object) -> None:
+        installs.append("installed")
+
+    entity.async_install = fake_install  # type: ignore[method-assign]
+    monkeypatch.setattr(update, "AUTO_INSTALL_WAIT_S", 0)
+
+    # Not added to Home Assistant yet: no install, and the flag is released.
+    entity._auto_install_running = True
+    asyncio.run(entity._async_auto_install())
+    assert installs == []
+    assert entity._auto_install_running is False
+
+    # Added: installs.
+    entity.__dict__["entity_id"] = "update.tv_app"
+    entity.__dict__["platform"] = object()
+    monkeypatch.setattr(update, "AUTO_INSTALL_WAIT_S", 1)
+    asyncio.run(entity._async_auto_install())
+    assert installs == ["installed"]

@@ -7,6 +7,7 @@ its own folder in custom_components, then asks for a Home Assistant restart.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import logging
@@ -68,6 +69,7 @@ else:
 _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(hours=1)
+AUTO_INSTALL_WAIT_S = 120
 INTEGRATION_ZIP_NAME = "ha-tv-pip-plus-integration.zip"
 DATA_INTEGRATION_UPDATE_ENTRY = "integration_update_entry"
 RESTART_ISSUE_ID = "restart_required_after_update"
@@ -165,6 +167,16 @@ class ReceiverAppUpdate(ReceiverEntity, _ReleaseUpdate):
                 self.hass.async_create_task(self._async_auto_install())
 
     async def _async_auto_install(self) -> None:
+        # The first status poll runs before Home Assistant has added the entity.
+        # Installing then fails half-way and leaves "installing" stuck on, so
+        # wait until the entity exists.
+        for _ in range(AUTO_INSTALL_WAIT_S):
+            if getattr(self, "entity_id", None) and getattr(self, "platform", None):
+                break
+            await asyncio.sleep(1)
+        else:
+            self._auto_install_running = False
+            return
         try:
             install = getattr(self, "async_install_with_progress", None)
             if callable(install):
