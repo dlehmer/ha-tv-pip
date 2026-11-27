@@ -1,5 +1,11 @@
 # What's New ✨
 
+## 1.39.0 - Wireless Debugging Setup 📶
+
+- TVs that only offer Wireless debugging (like newer Google TVs) can now be set up from Home Assistant 📶
+- On Home Assistant OS, setup offers to install a small ADB server helper app for you, then asks for the TV's pairing code 🔐
+- Install or update TV app and Grant overlay permission work on these TVs too 🛠️
+
 ## 1.38.4 - Cameras Stay Together 📹
 
 - Camera popups always use the overlay when the TV allows it, so a burst of cameras can't close the others 🐛
