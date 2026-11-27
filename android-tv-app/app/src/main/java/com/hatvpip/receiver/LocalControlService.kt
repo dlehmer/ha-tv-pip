@@ -110,7 +110,11 @@ class LocalControlService : Service() {
         if (command.hasActions && !overlayForActions) {
             AppLog.error("Popup has action buttons but overlay permission is not granted; buttons hidden")
         }
-        if (command.startsDirectlyInOverlay() || overlayForActions) {
+        // While popups are already up, every new one joins them in the overlay. Switching to
+        // native picture-in-picture would close the popups (and their door buttons).
+        val joinOverlay = canDrawOverlays() &&
+            ReceiverRuntimeState.snapshot().mode == ReceiverPlaybackMode.Overlay
+        if (command.startsDirectlyInOverlay() || overlayForActions || joinOverlay) {
             startService(
                 Intent(this, OverlayPlayerService::class.java)
                     .setAction(OverlayPlayerService.ACTION_SHOW)

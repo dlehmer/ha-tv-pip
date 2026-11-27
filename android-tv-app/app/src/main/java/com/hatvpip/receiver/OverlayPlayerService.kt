@@ -94,14 +94,17 @@ class OverlayPlayerService : Service() {
             // Same camera again: take over its place and size.
             popup.slot = sameCamera.slot
             popup.compact = sameCamera.compact
+            popup.grid = sameCamera.grid
             removePopup(sameCamera)
         } else {
             while (popups.size >= MAX_POPUPS) {
                 removePopup(popups.first())
             }
-            reflow()
+            // Room for one more: a fourth popup turns the row into a two-by-two grid.
+            reflow(extra = 1)
             popup.slot = popups.size
-            popup.compact = popups.isNotEmpty()
+            popup.grid = popups.size + 1 >= GRID_THRESHOLD
+            popup.compact = popup.grid || popups.isNotEmpty()
         }
         // The dark layer goes in first so it sits underneath every popup.
         showDim(popup.dimPercent)
@@ -115,7 +118,7 @@ class OverlayPlayerService : Service() {
             return
         }
         requestMediaFocus(popup.mediaFocus)
-        if (popup.actions.isNotEmpty()) {
+        if (popup.selectable) {
             focusPopup(popup)
         }
     }
@@ -142,7 +145,7 @@ class OverlayPlayerService : Service() {
                 stopSelf()
             } else if (!closingAll) {
                 reflow()
-                popups.lastOrNull { it.actions.isNotEmpty() && !it.closing }?.let { focusPopup(it) }
+                popups.lastOrNull { it.selectable && !it.closing }?.let { focusPopup(it) }
             }
         }
     }
@@ -213,11 +216,19 @@ class OverlayPlayerService : Service() {
      * Close the gaps: the remaining popups slide over in order, and whichever is first
      * grows to full size while the others stay compact.
      */
-    private fun reflow() {
-        popups.filter { !it.closing }.sortedBy { it.slot }.forEachIndexed { index, popup ->
-            popup.moveTo(slot = index, compact = index > 0)
+    private fun reflow(extra: Int = 0) {
+        val active = popups.filter { !it.closing }.sortedBy { it.slot }
+        val grid = active.size + extra >= GRID_THRESHOLD
+        active.forEachIndexed { index, popup ->
+            popup.moveTo(slot = index, compact = grid || index > 0, grid = grid)
         }
     }
+
+    /**
+     * Vertical step between the two grid rows. Fixed rather than measured, because the
+     * first row is still shrinking into the grid when the second row is placed.
+     */
+    private fun gridRowPitch(): Int = GRID_ROW_PX + SLOT_GAP_PX
 
     private fun removePopup(popup: Popup) {
         popup.remove()
@@ -229,7 +240,7 @@ class OverlayPlayerService : Service() {
      * so Left/Right at the edge of its buttons moves to the popup beside it.
      */
     private fun focusPopup(target: Popup) {
-        popups.filter { it.actions.isNotEmpty() }.forEach { popup ->
+        popups.filter { it.selectable }.forEach { popup ->
             val view = popup.overlayView ?: return@forEach
             val params = popup.mediaParams ?: return@forEach
             val notFocusable = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -243,22 +254,66 @@ class OverlayPlayerService : Service() {
         target.focusTarget()?.let { view -> view.post { view.requestFocus() } }
     }
 
-    /** The popup with buttons beside [from] on screen, to the left or right. */
-    private fun neighbourPopup(from: Popup, toLeft: Boolean): Popup? {
-        val screenWidth = resources.displayMetrics.widthPixels
-        fun left(popup: Popup): Int =
-            if ((popup.overlayGravity() and Gravity.END) == Gravity.END) {
-                screenWidth - popup.slotX() - popup.overlayWidth()
-            } else {
-                popup.slotX()
-            }
-        val mine = left(from)
-        val candidates = popups.filter { it !== from && it.actions.isNotEmpty() }
-        return if (toLeft) {
-            candidates.filter { left(it) < mine }.maxByOrNull { left(it) }
-        } else {
-            candidates.filter { left(it) > mine }.minByOrNull { left(it) }
+    /**
+     * Make it obvious which camera has the remote: the selected one is fully bright with a
+     * thick outline, the others dim until you move to them.
+     */
+    private fun markSelected(selected: Popup) {
+        if (popups.count { it.selectable && !it.closing } < 2) {
+            popups.filter { !it.closing }.forEach { it.setDimmed(false) }
+            return
         }
+        popups.filter { !it.closing }.forEach { it.setDimmed(it !== selected) }
+    }
+
+    /**
+     * The selectable popup next to [from] on screen in the direction of [keyCode]
+     * (a D-pad key), judged by where the popups actually are.
+     */
+    private fun neighbourPopup(from: Popup, keyCode: Int): Popup? {
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+        fun centre(popup: Popup): Pair<Int, Int> {
+            val params = popup.mediaParams ?: return 0 to 0
+            val width = popup.overlayView?.width?.takeIf { it > 0 } ?: popup.overlayWidth()
+            val height = popup.overlayView?.height?.takeIf { it > 0 } ?: COMPACT_HEIGHT_PX
+            val left = if ((params.gravity and Gravity.END) == Gravity.END) {
+                screenWidth - params.x - width
+            } else {
+                params.x
+            }
+            val top = if ((params.gravity and Gravity.BOTTOM) == Gravity.BOTTOM) {
+                screenHeight - params.y - height
+            } else {
+                params.y
+            }
+            return (left + width / 2) to (top + height / 2)
+        }
+        val (fromX, fromY) = centre(from)
+        return popups
+            .filter { it !== from && it.selectable && !it.closing }
+            .map { it to centre(it) }
+            .filter { (_, c) ->
+                val (x, y) = c
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> x < fromX - NAVIGATION_SLACK_PX
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> x > fromX + NAVIGATION_SLACK_PX
+                    KeyEvent.KEYCODE_DPAD_UP -> y < fromY - NAVIGATION_SLACK_PX
+                    KeyEvent.KEYCODE_DPAD_DOWN -> y > fromY + NAVIGATION_SLACK_PX
+                    else -> false
+                }
+            }
+            .minByOrNull { (_, c) ->
+                val dx = kotlin.math.abs(c.first - fromX)
+                val dy = kotlin.math.abs(c.second - fromY)
+                // Prefer the popup straight across over one diagonally away.
+                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    dx + 2 * dy
+                } else {
+                    dy + 2 * dx
+                }
+            }
+            ?.first
     }
 
     /**
@@ -269,8 +324,16 @@ class OverlayPlayerService : Service() {
         private val ctx: OverlayPlayerService get() = this@OverlayPlayerService
         val key: String? = intent?.getStringExtra(PlayerActivity.EXTRA_POPUP_KEY)
         var slot: Int = 0
-        /** Opened next to other popups: smaller, so up to three fit across the screen. */
+        /** Opened next to other popups: smaller, so several fit on screen. */
         var compact: Boolean = false
+        /** Four popups: laid out two by two instead of in a row. */
+        var grid: Boolean = false
+        /**
+         * Camera popups can be picked with the remote (to go full screen or reach their
+         * button); text-only notifications can't.
+         */
+        val selectable: Boolean
+            get() = streamType != StreamType.Notification
         var overlayView: ViewGroup? = null
         private var textOverlayView: ViewGroup? = null
         var mediaParams: WindowManager.LayoutParams? = null
@@ -351,7 +414,8 @@ class OverlayPlayerService : Service() {
                 streamType != StreamType.Notification &&
                 showNotification &&
                 !style.textOverlay &&
-                actions.isEmpty()
+                actions.isEmpty() &&
+                !selectable
             ) {
                 return showMediaWithFooterOverlay()
             }
@@ -371,7 +435,7 @@ class OverlayPlayerService : Service() {
                     layoutParams = mediaLayoutParams()
                 }
                 mediaContainerView = mediaContainer
-                if (actions.isNotEmpty()) {
+                if (selectable) {
                     makeVideoSelectable(mediaContainer)
                 }
                 if (streamType == StreamType.Snapshot) {
@@ -398,7 +462,7 @@ class OverlayPlayerService : Service() {
                 root.addView(buildActionBar())
             }
 
-            val params = overlayLayoutParams(overlayHeight(), OVERLAY_MARGIN_PX)
+            val params = overlayLayoutParams(overlayHeight(), slotY())
             // Buttons take D-pad focus, but only one popup at a time: the service decides
             // which (see focusPopup). Focus returns to the app underneath once it closes.
             mediaParams = params
@@ -643,8 +707,12 @@ class OverlayPlayerService : Service() {
                     when (keyCode) {
                         KeyEvent.KEYCODE_BACK -> {
                             if (event.action == KeyEvent.ACTION_UP) {
-                                AppLog.playbackStop(reason = "overlay_back_pressed")
-                                closeAll()
+                                if (expanded) {
+                                    setExpanded(false)
+                                } else {
+                                    AppLog.playbackStop(reason = "overlay_back_pressed")
+                                    closeAll()
+                                }
                             }
                             true
                         }
@@ -653,16 +721,24 @@ class OverlayPlayerService : Service() {
                             val goingLeft = keyCode == KeyEvent.KEYCODE_DPAD_LEFT
                             val atEdge = if (goingLeft) index == 0 else index == actions.lastIndex
                             if (atEdge && event.action == KeyEvent.ACTION_DOWN) {
-                                neighbourPopup(this@Popup, goingLeft)?.let { focusPopup(it) }
+                                neighbourPopup(this@Popup, keyCode)?.let { focusPopup(it) }
                                 true
                             } else {
                                 atEdge
                             }
                         }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            // Below the buttons: the popup underneath, in a grid.
+                            if (event.action == KeyEvent.ACTION_DOWN) {
+                                neighbourPopup(this@Popup, keyCode)?.let { focusPopup(it) }
+                            }
+                            true
+                        }
                         else -> false
                     }
                 }
                 setOnFocusChangeListener { view, hasFocus ->
+                    if (hasFocus) markSelected(this@Popup)
                     if (hasFocus && !closing && !actionInFlight) {
                         // On a button: this popup stays until it's dismissed (or the door is
                         // used), instead of timing out under the remote.
@@ -1154,7 +1230,7 @@ class OverlayPlayerService : Service() {
 
         /**
          * The video can be selected with the remote: OK makes it fill the screen (and back),
-         * Down goes to the door button, Back closes every popup.
+         * Down goes to the door button. Back from full screen returns to the popups; otherwise it closes every popup.
          */
         private fun makeVideoSelectable(media: FrameLayout) {
             media.isFocusable = true
@@ -1165,7 +1241,7 @@ class OverlayPlayerService : Service() {
                     GradientDrawable().apply {
                         setColor(Color.TRANSPARENT)
                         setStroke(
-                            ACTION_FOCUSED_STROKE_PX,
+                            SELECTED_VIDEO_STROKE_PX,
                             parseColorOrDefault(buttonStyle.accentColor, DEFAULT_ACCENT_COLOR)
                         )
                     }
@@ -1173,21 +1249,40 @@ class OverlayPlayerService : Service() {
                 addState(intArrayOf(), GradientDrawable().apply { setColor(Color.TRANSPARENT) })
             }
             media.setOnClickListener { setExpanded(!expanded) }
+            media.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) markSelected(this@Popup)
+            }
             media.setOnKeyListener { _, keyCode, event ->
                 when (keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
                         if (event.action == KeyEvent.ACTION_UP) {
-                            AppLog.playbackStop(reason = "overlay_back_pressed")
-                            closeAll()
+                            if (expanded) {
+                                // Back from full screen returns to the popups as they were.
+                                setExpanded(false)
+                            } else {
+                                AppLog.playbackStop(reason = "overlay_back_pressed")
+                                closeAll()
+                            }
                         }
                         true
                     }
-                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+                    KeyEvent.KEYCODE_DPAD_UP -> {
                         if (event.action == KeyEvent.ACTION_DOWN && !expanded) {
-                            neighbourPopup(this@Popup, keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
-                                ?.let { focusPopup(it) }
+                            neighbourPopup(this@Popup, keyCode)?.let { focusPopup(it) }
                         }
                         true
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        // Down goes to this popup's door button; without one, to the popup below.
+                        if (actionButtons.isNotEmpty()) {
+                            false
+                        } else {
+                            if (event.action == KeyEvent.ACTION_DOWN && !expanded) {
+                                neighbourPopup(this@Popup, keyCode)?.let { focusPopup(it) }
+                            }
+                            true
+                        }
                     }
                     else -> false
                 }
@@ -1226,6 +1321,15 @@ class OverlayPlayerService : Service() {
             media.post { media.requestFocus() }
         }
 
+        /** Dimmed while another camera has the remote. */
+        fun setDimmed(dimmed: Boolean) {
+            if (closing) return
+            val target = if (dimmed) UNSELECTED_ALPHA else 1f
+            listOfNotNull(overlayView, textOverlayView).forEach { view ->
+                view.animate().alpha(target).setDuration(SELECT_ANIMATION_MS).start()
+            }
+        }
+
         fun setHidden(hidden: Boolean) {
             val visibility = if (hidden) View.INVISIBLE else View.VISIBLE
             overlayView?.visibility = visibility
@@ -1236,13 +1340,19 @@ class OverlayPlayerService : Service() {
          * Slide to another slot and grow or shrink to match it, animated. Used when a
          * popup beside this one closes.
          */
-        fun moveTo(slot: Int, compact: Boolean) {
-            if (slot == this.slot && compact == this.compact) return
+        fun moveTo(slot: Int, compact: Boolean, grid: Boolean) {
+            if (slot == this.slot && compact == this.compact && grid == this.grid) return
             val view = overlayView
             val params = mediaParams
             if (view == null || params == null || expanded) {
                 this.slot = slot
                 this.compact = compact
+                this.grid = grid
+                normalParams?.let { saved ->
+                    saved.x = slotX()
+                    saved.y = slotY()
+                    saved.width = overlayWidth()
+                }
                 return
             }
             val media = mediaContainerView
@@ -1250,11 +1360,14 @@ class OverlayPlayerService : Service() {
             val windowFixed = params.height > 0
             val fromWidth = params.width
             val fromX = params.x
+            val fromY = params.y
             val fromHeight = if (mediaFixed) media!!.layoutParams.height else params.height
             this.slot = slot
             this.compact = compact
+            this.grid = grid
             val toWidth = overlayWidth()
             val toX = slotX()
+            val toY = slotY()
             val toHeight = if (mediaFixed) mediaHeightPx() else if (windowFixed) {
                 if (textOverlayView != null) mediaHeightPx() else overlayHeight()
             } else {
@@ -1268,6 +1381,7 @@ class OverlayPlayerService : Service() {
                     fun lerp(from: Int, to: Int): Int = from + ((to - from) * f).toInt()
                     params.width = lerp(fromWidth, toWidth)
                     params.x = lerp(fromX, toX)
+                    params.y = lerp(fromY, toY)
                     if (mediaFixed) {
                         media!!.layoutParams = media.layoutParams.apply {
                             height = lerp(fromHeight, toHeight)
@@ -1405,7 +1519,16 @@ class OverlayPlayerService : Service() {
         private fun mediaHeightPx(): Int = if (compact) COMPACT_HEIGHT_PX else OVERLAY_HEIGHT_PX
 
         /** Distance from the screen edge: popups sit side by side, one per slot. */
-        fun slotX(): Int = OVERLAY_MARGIN_PX + (0 until slot).sumOf { SLOT_WIDTHS_PX[it] + SLOT_GAP_PX }
+        fun slotX(): Int =
+            if (grid) {
+                OVERLAY_MARGIN_PX + (slot % GRID_COLUMNS) * (COMPACT_WIDTH_PX + SLOT_GAP_PX)
+            } else {
+                OVERLAY_MARGIN_PX + (0 until slot).sumOf { SLOT_WIDTHS_PX[it] + SLOT_GAP_PX }
+            }
+
+        /** Distance from the top (or bottom) edge: the second grid row sits below the first. */
+        fun slotY(): Int =
+            if (grid) OVERLAY_MARGIN_PX + (slot / GRID_COLUMNS) * gridRowPitch() else OVERLAY_MARGIN_PX
 
         private fun overlayHeight(): Int =
             (if (compact) null else style.height) ?: if (streamType == StreamType.Notification) {
@@ -1510,11 +1633,23 @@ class OverlayPlayerService : Service() {
         const val ACTION_STOP = "com.hatvpip.receiver.action.STOP_OVERLAY"
         const val ACTION_CLOSE_POPUP = "com.hatvpip.receiver.action.CLOSE_OVERLAY_POPUP"
         /** Popups shown at once; a new one past this closes the oldest. */
-        const val MAX_POPUPS = 3
+        const val MAX_POPUPS = 4
+        /** From this many popups, they're laid out two by two. */
+        private const val GRID_THRESHOLD = 4
+        private const val GRID_COLUMNS = 2
+        /** Height of a grid row: a compact video plus its title and door button. */
+        private const val GRID_ROW_PX = 420
+        /** How far another popup must be, in a direction, to count as "that way". */
+        private const val NAVIGATION_SLACK_PX = 40
         private const val MAX_DIM_PERCENT = 80
         private const val FADE_IN_MS = 250L
         /** How long a popup takes to slide and grow into a freed-up place. */
         private const val RESIZE_MS = 400L
+        /** Outline around the camera that has the remote. */
+        private const val SELECTED_VIDEO_STROKE_PX = 8
+        /** How faded the other popups are while one camera is selected. */
+        private const val UNSELECTED_ALPHA = 0.55f
+        private const val SELECT_ANIMATION_MS = 150L
         /** Wait a couple of frames after hiding a faded popup before removing its window. */
         private const val WINDOW_REMOVE_DELAY_MS = 50L
         /** Popups fade from opaque to transparent over this long when they close. */

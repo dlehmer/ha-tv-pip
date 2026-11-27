@@ -1,5 +1,13 @@
 # What's New ✨
 
+## 1.38.3 - Easier Picking Between Cameras 🎯
+
+- Up to four cameras at once, tiled two by two 🔲
+- Every camera popup can be selected and made full screen, not just ones with a door button 🎯
+- The selected camera gets a thick outline and the others dim 🔆
+- Back from full screen returns to the popups you had ↩️
+- A camera without a door button no longer closes the other popups 🐛
+
 ## 1.38.2 - Smoother Fade Out ✨
 
 - Popups no longer flash back on at the end of fading out ✨

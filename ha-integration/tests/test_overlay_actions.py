@@ -285,6 +285,9 @@ def test_same_camera_replaces_its_buttons_and_oldest_popup_drops_out() -> None:
     )
     assert store.take(first[0]["id"], "tv", now=0) is None
 
+    store.replace_for_device(
+        "tv", _unlock("Z"), ttl_seconds=30, popup_key="camera.z", now=0
+    )
     b = store.replace_for_device(
         "tv", _unlock("B"), ttl_seconds=30, popup_key="camera.b", now=0
     )
@@ -295,7 +298,7 @@ def test_same_camera_replaces_its_buttons_and_oldest_popup_drops_out() -> None:
         "tv", _unlock("D"), ttl_seconds=30, popup_key="camera.d", now=0
     )
 
-    # Only three popups fit: A (the oldest) lost its button.
+    # Only four popups fit: A (the oldest) lost its button.
     assert store.take(again[0]["id"], "tv", now=0) is None
     for wire in (b, c, d):
         assert store.take(wire[0]["id"], "tv", now=0) is not None

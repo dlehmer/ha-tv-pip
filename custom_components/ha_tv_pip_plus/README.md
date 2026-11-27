@@ -617,17 +617,17 @@ only used when Home Assistant turned the TV on; a TV that was already on gets li
 
 ## Several Cameras at Once 📹
 
-A TV shows up to three camera popups side by side, each with its own door button. The
+A TV shows up to four camera popups: up to three side by side, and four tiled two by two, each with its own door button. The
 first opens full size; ones that arrive while it's up open smaller next to it. The same
-camera again replaces its own popup, and a fourth camera closes the oldest. Only one
-popup has the remote at a time: Left/Right moves between them. Back closes all of them
-at once and resumes what you were watching. When one times out or closes, the others
+camera again replaces its own popup, and a fifth camera closes the oldest. Only one
+popup has the remote at a time: Left/Right moves between them. Back (when nothing is full
+screen) closes all of them at once and resumes what you were watching. When one times out or closes, the others
 slide over to fill the gap and the first one grows to full size. Once you move onto a
 popup's door button, that popup no longer times out; close it with Back.
 
-**Full screen:** on a popup with a door button, the video gets the remote first. Press
-OK to fill the screen (the button stays along the bottom), OK again to shrink it, and
-Down to reach the button.
+**Full screen:** any camera popup can be selected; the selected one gets a thick
+outline and the others dim. Press OK to fill the screen (a door button stays along the
+bottom), OK or Back to return to the popups as they were, and Down to reach the button.
 
 **Dimming and fading:** the TV is darkened behind popups (**Darken the TV behind
 popups**, default 30%, in the **Popups, buttons and updates** section). When a popup
