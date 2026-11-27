@@ -13,12 +13,13 @@ It is a fork of [HA TV PiP](https://github.com/manix84/ha-tv-pip) by [manix84](h
    - **Find its IP address**: Settings → Network & Internet → your Wi-Fi network (or Ethernet) → **IP address** (some TVs: Settings → System → About → Status). Reserving that address for the TV in your router keeps it from changing.
    - **Turn on developer options**: Settings → System → About (some TVs: Device Preferences → About) → select **Android TV OS build** 7 times until it says you're a developer.
    - **Turn on USB debugging**: Settings → System → Developer options → **USB debugging** (some TVs call it Network or ADB debugging).
+   - **Only Wireless debugging?** Newer Google TVs (such as the Google TV Streamer) don't accept connections from USB debugging. Turn on **Wireless debugging** in Developer options instead. On Home Assistant OS, setup notices this, offers to install a small helper app (**HA TV PiP Plus ADB server**, from this repository), and asks for the pairing code from **Wireless debugging → Pair device with pairing code**. Home Assistant Container and Core installs need USB debugging.
 3. **Add the TV**: Settings → Devices & services → Add integration → **HA TV PiP Plus**. Enter the TV's IP address and tick **Install the HA TV PiP Plus app on this TV first**. Accept the "Allow debugging?" prompt on the TV. Home Assistant installs the app, allows it to show popups over other apps, and pairs with it; type the code the TV shows.
 4. **Set up each TV** (optional): its **Configure** page has everything on one page: door buttons, turning the TV on (on a schedule if you like), do not disturb, popup look, and a **Send a test popup** box.
 5. **Turn the TV on for popups** (optional): at the end of setup Home Assistant asks whether it should turn the TV on when a popup comes in. That uses the TV's **Android TV Remote** integration; if it isn't paired yet, the setup page links to it (enter the same IP address and type the code the TV shows).
 6. **Use it** in automations with the `ha_tv_pip_plus.show_camera` action.
 
-You can turn USB debugging off afterwards; it's only needed again for **Install or update TV app** and **Grant overlay permission** on the TV's device page.
+You can turn USB debugging (or Wireless debugging) off afterwards; it's only needed again for **Install or update TV app** and **Grant overlay permission** on the TV's device page. TVs set up with Wireless debugging stay paired, so turning it back on is enough.
 
 ## See It In Action 📸
 

@@ -16,6 +16,12 @@ from .actions import (
     async_save_camera_buttons,
     camera_buttons,
 )
+from .adb_server import (
+    async_install_server_app,
+    async_pair_wireless,
+    async_server_app_state,
+    supervisor_available,
+)
 from .adb_setup import (
     AdbSetupError,
     async_install_app,
@@ -110,6 +116,13 @@ except (ImportError, ModuleNotFoundError):
     ha_selector = None
 
 _LOGGER = logging.getLogger(__name__)
+CONF_WIRELESS_CODE = "wireless_code"
+CONF_WIRELESS_PAIRING_PORT = "pairing_port"
+CONF_WIRELESS_CONNECT_PORT = "connect_port"
+# Install errors that mean "port 5555 is closed; try Wireless debugging".
+WIRELESS_CODES = frozenset(
+    {"not_reachable", "wireless_off", "wireless_not_paired", "server_missing"}
+)
 PAIRING_CLIENT_ID = "home-assistant"
 PAIRING_CLIENT_NAME = "Home Assistant"
 
@@ -135,6 +148,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
     _discovered_receiver: ReceiverDiscovery | None = None
     _pairing_receiver: ReceiverDiscovery | None = None
     _install_receiver: ReceiverDiscovery | None = None
+    _server_task: asyncio.Task[None] | None = None
+    _server_error: str | None = None
     _finished_receiver: ReceiverDiscovery | None = None
     _finished_token: str | None = None
 
@@ -192,22 +207,133 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call
                 await async_install_app(self.hass, receiver.host)
             except AdbSetupError as error:
                 _LOGGER.warning("HA TV PiP Plus app install failed: %s", error)
+                if error.code in WIRELESS_CODES and supervisor_available(self.hass):
+                    # Port 5555 is closed: this TV needs Wireless debugging.
+                    return await self.async_step_adb_server()
                 errors["base"] = f"adb_{error.code}"
             else:
-                await _async_wait_for_receiver(receiver.host, receiver.port)
-                self._install_receiver = None
-                token = await _async_pair_over_adb(self.hass, receiver)
-                if token is not None:
-                    return await self._async_finish(
-                        replace(receiver, pairing="paired"), token=token
-                    )
-                # Automatic pairing failed: fall back to the code on the TV.
-                self._pairing_receiver = receiver
-                return await self.async_step_pair()
+                return await self._async_installed(receiver)
 
         return self.async_show_form(
             step_id="install_app",
             data_schema=vol.Schema({}),
+            description_placeholders={CONF_HOST: receiver.host},
+            errors=errors,
+        )
+
+    async def _async_installed(self, receiver: ReceiverDiscovery) -> Any:
+        """The app is on the TV: pair with it over ADB, or by the code on screen."""
+
+        await _async_wait_for_receiver(receiver.host, receiver.port)
+        self._install_receiver = None
+        token = await _async_pair_over_adb(self.hass, receiver)
+        if token is not None:
+            return await self._async_finish(
+                replace(receiver, pairing="paired"), token=token
+            )
+        # Automatic pairing failed: fall back to the code on the TV.
+        self._pairing_receiver = receiver
+        return await self.async_step_pair()
+
+    async def async_step_adb_server(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """This TV only offers Wireless debugging: offer to install the ADB app."""
+
+        receiver = self._install_receiver
+        if receiver is None:
+            return self.async_abort(reason="invalid_discovery")
+        if self._server_error is None and await async_server_app_state(
+            self.hass
+        ) not in ("missing", "unavailable"):
+            return await self.async_step_wireless_pair()
+
+        errors: dict[str, str] = {}
+        if self._server_error is not None:
+            errors["base"] = f"adb_{self._server_error}"
+            self._server_error = None
+        elif user_input is not None:
+            return await self.async_step_install_adb_server()
+
+        return self.async_show_form(
+            step_id="adb_server",
+            data_schema=vol.Schema({}),
+            description_placeholders={CONF_HOST: receiver.host},
+            errors=errors,
+        )
+
+    async def async_step_install_adb_server(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Install and start the ADB server app, showing progress."""
+
+        if self._server_task is None:
+            self._server_task = self.hass.async_create_task(
+                async_install_server_app(self.hass)
+            )
+        if not self._server_task.done():
+            return self.async_show_progress(
+                step_id="install_adb_server",
+                progress_action="install_adb_server",
+                progress_task=self._server_task,
+            )
+
+        task, self._server_task = self._server_task, None
+        try:
+            await task
+        except AdbSetupError as error:
+            _LOGGER.warning("Installing the ADB server app failed: %s", error)
+            self._server_error = error.code
+            return self.async_show_progress_done(next_step_id="adb_server")
+        return self.async_show_progress_done(next_step_id="wireless_pair")
+
+    async def async_step_wireless_pair(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> Any:
+        """Pair with the TV's Wireless debugging, then install the app."""
+
+        receiver = self._install_receiver
+        if receiver is None:
+            return self.async_abort(reason="invalid_discovery")
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            raw_code = str(user_input.get(CONF_WIRELESS_CODE, ""))
+            code = "".join(ch for ch in raw_code if ch.isdigit())
+            if len(code) != 6:
+                errors[CONF_WIRELESS_CODE] = "invalid_code"
+            else:
+                try:
+                    await async_pair_wireless(
+                        self.hass,
+                        receiver.host,
+                        code=code,
+                        pairing_port=_optional_port(
+                            user_input.get(CONF_WIRELESS_PAIRING_PORT)
+                        ),
+                        connect_port=_optional_port(
+                            user_input.get(CONF_WIRELESS_CONNECT_PORT)
+                        ),
+                    )
+                    await async_install_app(self.hass, receiver.host)
+                except AdbSetupError as error:
+                    _LOGGER.warning("Wireless debugging setup failed: %s", error)
+                    errors["base"] = f"adb_{error.code}"
+                else:
+                    return await self._async_installed(receiver)
+
+        return self.async_show_form(
+            step_id="wireless_pair",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_WIRELESS_CODE): str,
+                    vol.Optional(CONF_WIRELESS_PAIRING_PORT): vol.Coerce(int),
+                    vol.Optional(CONF_WIRELESS_CONNECT_PORT): vol.Coerce(int),
+                }
+            ),
             description_placeholders={CONF_HOST: receiver.host},
             errors=errors,
         )
@@ -1230,6 +1356,15 @@ def _receiver_from_zeroconf(discovery_info: ZeroconfDiscoveryInfo) -> ReceiverDi
         port=discovery_info.port,
         properties=dict(discovery_info.properties),
     )
+
+
+def _optional_port(value: Any) -> int | None:
+    """A port from an optional form field; blank means look it up."""
+
+    if value in (None, ""):
+        return None
+    port = int(value)
+    return port if 0 < port < 65536 else None
 
 
 async def _async_pair_over_adb(hass: Any, receiver: ReceiverDiscovery) -> str | None:

@@ -61,6 +61,31 @@ ERROR_HINTS = {
     "grant_failed": "The TV did not accept the overlay permission.",
     "adb_failed": "The ADB command failed.",
     "pairing_rejected": "The TV app did not accept automatic pairing.",
+    "server_unsupported": (
+        "Wireless debugging needs Home Assistant OS (or Supervised) so Home "
+        "Assistant can run its ADB server app."
+    ),
+    "server_missing": "The HA TV PiP Plus ADB server app is not installed.",
+    "server_install_failed": "Could not install the HA TV PiP Plus ADB server app.",
+    "server_start_failed": "The HA TV PiP Plus ADB server app did not start.",
+    "server_unreachable": "Could not reach the HA TV PiP Plus ADB server app.",
+    "wireless_pairing_port": (
+        "Could not find the TV's pairing port. Keep the pairing code on screen and "
+        "enter the port shown next to the IP address."
+    ),
+    "wireless_pair_failed": (
+        "The TV did not accept the pairing code. Open a new code on the TV and try "
+        "again."
+    ),
+    "wireless_off": (
+        "Could not find the TV over Wireless debugging. On the TV, open "
+        "Settings > System > Developer options and turn on Wireless debugging, "
+        "then try again."
+    ),
+    "wireless_not_paired": (
+        "The TV isn't paired with Home Assistant's ADB server. Remove the TV in "
+        "Home Assistant and add it again to pair."
+    ),
 }
 
 
@@ -226,6 +251,23 @@ async def _async_grant_overlay(device: Any) -> None:
 
 
 async def _async_connect(hass: Any, host: str) -> Any:
+    """Connect on port 5555, or through Wireless debugging when that's closed."""
+
+    try:
+        return await _async_connect_direct(hass, host)
+    except AdbSetupError as error:
+        if error.code != "not_reachable":
+            raise
+        from .adb_server import async_wireless_device
+
+        device = await async_wireless_device(hass, host)
+        if device is None:
+            raise
+        _LOGGER.debug("Port 5555 closed on %s; using Wireless debugging", host)
+        return device
+
+
+async def _async_connect_direct(hass: Any, host: str) -> Any:
     try:
         from adb_shell.adb_device_async import (  # type: ignore[import-not-found,import-untyped,unused-ignore]
             AdbDeviceTcpAsync,
